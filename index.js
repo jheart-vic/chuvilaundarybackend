@@ -24,7 +24,7 @@ app.use("/uploads", express.static(path.join(__dirname, "..", process.env.UPLOAD
 app.use("/api", routes);
 
 // health
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/", (req, res) => res.json({ ok: true }));
 
 // error handler
 app.use(errorHandler);
