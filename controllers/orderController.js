@@ -16,72 +16,77 @@ import { DateTime } from 'luxon'
  */
 
 export const createOrder = async (req, res, next) => {
+console.log("Raw req.body:", req.body);
+
   try {
-    const payload = req.body
-    const userPhone = req.user?.phone || payload.userPhone
+    const payload = req.body;
+    const userPhone = req.user?.phone || payload.userPhone;
     if (!userPhone)
-      return res.status(400).json({ message: 'userPhone required' })
+      return res.status(400).json({ message: "userPhone required" });
     if (!payload.items?.length)
-      return res.status(400).json({ message: 'At least one item is required' })
+      return res.status(400).json({ message: "At least one item is required" });
     if (!payload.pickup?.address)
-      return res.status(400).json({ message: 'Pickup address is required' })
+      return res.status(400).json({ message: "Pickup address is required" });
     if (!payload.delivery?.address)
-      return res.status(400).json({ message: 'Delivery address is required' })
+      return res.status(400).json({ message: "Delivery address is required" });
 
     // 1️⃣ Upload photos
-    const photos = []
+    const photos = [];
     if (req.files?.length) {
       for (const f of req.files) {
-        const result = await uploadToCloudinary(f.buffer, 'laundry/photos')
-        photos.push(result.secure_url)
+        const result = await uploadToCloudinary(f.buffer, "laundry/photos");
+        photos.push(result.secure_url);
       }
     }
 
     // 2️⃣ Coupon normalization
-    const couponCode = payload.couponCode?.trim().toUpperCase() || null
+    const couponCode = payload.couponCode?.trim().toUpperCase() || null;
 
     // 3️⃣ Subscription lookup (if any)
-    let plan = null
-    let usage = null
+    let plan = null;
+    let usage = null;
     const user = await User.findOne({ phone: userPhone }).populate(
-      'currentSubscription'
-    )
+      "currentSubscription"
+    );
 
     if (user?.currentSubscription) {
       const subscription = await Subscription.findById(
         user.currentSubscription._id
-      )
-      if (subscription?.status === 'ACTIVE') {
+      );
+      if (subscription?.status === "ACTIVE") {
         plan = await SubscriptionPlan.findOne({
           code: subscription.plan_code,
-          active: true
-        })
+          active: true,
+        });
 
-        const periodLabel = DateTime.now().toFormat('yyyy-LL')
+        const periodLabel = DateTime.now().toFormat("yyyy-LL");
         usage = await SubUsage.findOneAndUpdate(
           { subscription: subscription._id, period_label: periodLabel },
           {},
           { new: true, upsert: true }
-        )
+        );
       }
     }
 
     // 🚨 Strict check: if client requests SUBSCRIPTION but user has none
-    if (payload.pricingModel === 'SUBSCRIPTION' && !plan) {
+    if (payload.pricingModel === "SUBSCRIPTION" && !plan) {
       return res
         .status(400)
-        .json({ message: 'User has no active subscription' })
+        .json({ message: "User has no active subscription" });
     }
+console.log("Incoming serviceTier:", payload.serviceTier);
 
     // 4️⃣ Determine pricing model
     const pricingModel =
-      payload.pricingModel || (plan ? 'SUBSCRIPTION' : 'RETAIL')
+      payload.pricingModel || (plan ? "SUBSCRIPTION" : "RETAIL");
 
-    // 5️⃣ Resolve serviceTier (differs by model)
+    // 5️⃣ Resolve serviceTier
     const serviceTier =
-      pricingModel === 'SUBSCRIPTION'
-        ? plan?.serviceTier || 'STANDARD' // enforce from plan
-        : payload.serviceTier?.toUpperCase() || 'STANDARD'
+      pricingModel === "SUBSCRIPTION"
+        ? plan?.serviceTier || "STANDARD"
+        : payload.serviceTier?.toUpperCase() || "STANDARD";
+
+    console.log("Resolved serviceTier:", serviceTier);
 
     // 6️⃣ Compute totals (mutates items to add .price)
     const totals = await computeOrderTotals(
@@ -91,24 +96,23 @@ export const createOrder = async (req, res, next) => {
         pricingModel,
         subscriptionPlanCode: plan?.code,
         userPhone,
-        serviceTier // ✅ resolved value always wins
+        serviceTier, // ✅ resolved value always wins
       },
       { plan, usage }
-    )
+    );
 
     // 7️⃣ SLA calculation (always use util)
-    const hasExpress = payload.items.some(i => i.express)
+    const hasExpress = payload.items.some((i) => i.express);
 
     const expectedReadyAt = computeExpectedReadyAt(
       new Date(payload.pickup.date),
-      plan?.serviceTier || serviceTier, // subscription tier wins, else retail tier
+      serviceTier, // ✅ always use resolved serviceTier
       { express: hasExpress }
-    )
+    );
 
-    // derive hours from difference
     const slaHours = Math.round(
       (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
-    )
+    );
 
     // 8️⃣ Create order
     const order = await Order.create({
@@ -123,170 +127,38 @@ export const createOrder = async (req, res, next) => {
       delivery: {
         date: payload.delivery.date,
         window: payload.delivery.window,
-        address: payload.delivery.address
+        address: payload.delivery.address,
       },
-      status: 'Booked',
-      history: [{ status: 'Booked', note: 'Order created' }],
+      status: "Booked",
+      history: [{ status: "Booked", note: "Order created" }],
       subscriptionPlanCode: plan?.code || null,
-      slaHours: plan?.sla_hours || null,
       pricingModel,
       serviceTier,
       slaHours,
-      expectedReadyAt
-    })
+      expectedReadyAt,
+    });
 
     // 9️⃣ Track coupon usage
     if (couponCode) {
-      const coupon = await Coupon.findOne({ code: couponCode })
+      const coupon = await Coupon.findOne({ code: couponCode });
       if (coupon) {
-        coupon.uses += 1
+        coupon.uses += 1;
         coupon.redemptions.push({
           userPhone,
           orderId: order._id,
-          redeemedAt: DateTime.now().setZone('Africa/Lagos').toJSDate()
-        })
-        await coupon.save()
+          redeemedAt: DateTime.now().setZone("Africa/Lagos").toJSDate(),
+        });
+        await coupon.save();
       }
     }
 
-    await notifyOrderEvent({ user: req.user, order, type: 'created' })
-    res.status(201).json({ order })
+    await notifyOrderEvent({ user: req.user, order, type: "created" });
+    res.status(201).json({ order });
   } catch (err) {
-    console.error('Create order failed:', err)
-    next(err)
+    console.error("Create order failed:", err);
+    next(err);
   }
-}
-
-// export const createOrder = async (req, res, next) => {
-//   try {
-//     const payload = req.body;
-//     const userPhone = req.user?.phone || payload.userPhone;
-//     if (!userPhone)
-//       return res.status(400).json({ message: "userPhone required" });
-//     if (!payload.items?.length)
-//       return res.status(400).json({ message: "At least one item is required" });
-//     if (!payload.pickup?.address)
-//       return res.status(400).json({ message: "Pickup address is required" });
-//     if (!payload.delivery?.address)
-//       return res.status(400).json({ message: "Delivery address is required" });
-
-//     // 1️⃣ Upload photos
-//     const photos = [];
-//     if (req.files?.length) {
-//       for (const f of req.files) {
-//         const result = await uploadToCloudinary(f.buffer, "laundry/photos");
-//         photos.push(result.secure_url);
-//       }
-//     }
-
-//     // 2️⃣ Coupon normalization
-//     const couponCode = payload.couponCode?.trim().toUpperCase() || null;
-
-//     // 3️⃣ Subscription lookup (if any)
-//     let plan = null;
-//     let usage = null;
-//     const user = await User.findOne({ phone: userPhone }).populate(
-//       "currentSubscription"
-//     );
-
-//     if (user?.currentSubscription) {
-//       const subscription = await Subscription.findById(
-//         user.currentSubscription._id
-//       );
-//       if (subscription?.status === "ACTIVE") {
-//         plan = await SubscriptionPlan.findOne({
-//           code: subscription.plan_code,
-//           active: true,
-//         });
-
-//         const periodLabel = DateTime.now().toFormat("yyyy-LL");
-//         usage = await SubUsage.findOneAndUpdate(
-//           { subscription: subscription._id, period_label: periodLabel },
-//           {},
-//           { new: true, upsert: true }
-//         );
-//       }
-//     }
-
-//     // 🚨 Strict check: if client requests SUBSCRIPTION but user has none
-//     if (payload.pricingModel === "SUBSCRIPTION" && !plan) {
-//       return res.status(400).json({ message: "User has no active subscription" });
-//     }
-
-//     // 4️⃣ Determine pricing model & tier
-//     const pricingModel =
-//       payload.pricingModel || (plan ? "SUBSCRIPTION" : "RETAIL");
-
-//     let serviceTier;
-
-//     // 5️⃣ Compute totals (mutates items to add .price)
-//     const totals = await computeOrderTotals(
-//       {
-//         ...payload,
-//         couponCode,
-//         pricingModel,
-//         subscriptionPlanCode: plan?.code,
-//         userPhone,
-//         serviceTier,
-//       },
-//       { plan, usage }
-//     );
-
-//     // 6️⃣ SLA calculation (fallback to generic SLA util)
-//     let expectedReadyAt = null;
-//     if (plan) {
-//       expectedReadyAt = computeExpectedReadyAt(
-//         new Date(payload.pickup.date),
-//         plan.tier,
-//         { express: payload.items.some((i) => i.express) }
-//       );
-//     }
-
-//     // 7️⃣ Create order
-//     const order = await Order.create({
-//       userPhone,
-//       userName: payload.userName,
-//       items: payload.items, // ✅ preserve items (with .price after totals computation)
-//       notes: payload.notes,
-//       photos,
-//       couponCode,
-//       totals,
-//       pickup: payload.pickup,
-//       delivery: {
-//         date: payload.delivery.date,
-//         window: payload.delivery.window,
-//         address: payload.delivery.address,
-//       },
-//       status: "Booked",
-//       history: [{ status: "Booked", note: "Order created" }],
-//       subscriptionPlanCode: plan?.code || null,
-//       slaHours: plan?.sla_hours || null,
-//       pricingModel,
-//       serviceTier,
-//       expectedReadyAt,
-//     });
-
-//     // 8️⃣ Track coupon usage
-//     if (couponCode) {
-//       const coupon = await Coupon.findOne({ code: couponCode });
-//       if (coupon) {
-//         coupon.uses += 1;
-//         coupon.redemptions.push({
-//           userPhone,
-//           orderId: order._id,
-//           redeemedAt: DateTime.now().setZone("Africa/Lagos").toJSDate(),
-//         });
-//         await coupon.save();
-//       }
-//     }
-
-//     await notifyOrderEvent({ user: req.user, order, type: "created" });
-//     res.status(201).json({ order });
-//   } catch (err) {
-//     console.error("Create order failed:", err);
-//     next(err);
-//   }
-// };
+};
 
 export const getOrder = async (req, res, next) => {
   try {
