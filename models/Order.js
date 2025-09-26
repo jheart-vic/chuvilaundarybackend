@@ -1,0 +1,91 @@
+import mongoose from 'mongoose'
+
+const OrderItemSchema = new mongoose.Schema(
+  {
+    serviceCode: String,
+    serviceName: String,
+    quantity: Number,
+    unit: String,
+    itemNotes: String,
+    addOns: [{ key: String, name: String, price: Number }],
+    price: Number
+  },
+  { _id: false }
+)
+
+export const Statuses = [
+  'Booked',
+  'Picked Up',
+  'In Cleaning',
+  'Ready',
+  'Out for Delivery',
+  'Delivered',
+  'Cancelled'
+]
+
+const OrderSchema = new mongoose.Schema(
+  {
+    userPhone: { type: String, required: true },
+    userName: String,
+    items: [OrderItemSchema],
+    notes: String,
+    photos: [String],
+    couponCode: String,
+    totals: {
+      itemsTotal: Number,
+      addOnsTotal: Number,
+      deliveryFee: Number,
+      discount: Number,
+      grandTotal: Number
+    },
+    pickup: {
+      date: Date,
+      window: String,
+      address: {
+        label: String,
+        line1: String,
+        line2: String,
+        city: String,
+        state: String,
+        landmark: String,
+        zone: String
+      }
+    },
+    delivery: {
+      date: Date,
+      window: String,
+      address: {
+        label: String,
+        line1: String,
+        line2: String,
+        city: String,
+        state: String,
+        landmark: String,
+        zone: String
+      }
+    },
+    status: { type: String, enum: Statuses, default: 'Booked' },
+    history: [
+      { status: String, note: String, at: { type: Date, default: Date.now } }
+    ],
+    rating: { type: Number, min: 1, max: 5, default: null },
+    pricingModel: {
+      type: String,
+      enum: ['RETAIL', 'SUBSCRIPTION'],
+      required: true
+    },
+    serviceTier: {
+      type: String,
+      enum: ['STANDARD', 'PREMIUM', 'SIGNATURE'],
+      required: true
+    },
+
+    subscriptionPlanCode: { type: String }, // e.g. "PREM_CHOICE_24"
+    slaHours: { type: Number },
+
+    expectedReadyAt: { type: Date }
+  },
+  { timestamps: true }
+)
+
+export default mongoose.model('Order', OrderSchema)
