@@ -21,6 +21,7 @@ export const adminRegister = async (req, res) => {
   if (user) return res.status(400).json({ message: "User already exists" });
 
   const hashedPassword = await bcrypt.hash(password, 10);
+  const referralCode = generateReferralCode();
 
   user = await User.create({
     phone,
@@ -28,6 +29,7 @@ export const adminRegister = async (req, res) => {
     email,
     password: hashedPassword,
     role: "admin",
+    referralCode,
     isVerified: true
   });
 
