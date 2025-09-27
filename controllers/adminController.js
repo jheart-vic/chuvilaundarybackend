@@ -110,6 +110,37 @@ export const createEmployee = async (req, res, next) => {
   }
 };
 
+//list all orders (admin only)
+export const listAllOrders = async (req, res, next) => {
+  try {
+    const { status, phone, page = 1, limit = 20 } = req.query;
+
+    const filter = {};
+    if (status) filter.status = status;
+    if (phone) filter.userPhone = phone;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Order.countDocuments(filter)
+    ]);
+
+    res.json({
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+      orders
+    });
+  } catch (err) {
+    console.error("Error in listAllOrders:", err);
+    next(err);
+  }
+};
 
 // list all employees (admin only)
 export const listEmployees = async (req, res, next) => {

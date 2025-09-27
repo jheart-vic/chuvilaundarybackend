@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  createOrder, getOrder, listUserOrders,  cancelOrder
+  createOrder,  listUserOrders,  cancelOrder
 } from "../controllers/orderController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
 import { upload } from "../middlewares/uploadMiddleware.js";
@@ -11,8 +11,7 @@ const router = Router();
 
 // create order (authenticated)
 router.post("/", requireAuth, upload.array("photos", 5), validateBody(createOrderSchema), createOrder);
-router.get("/:id", requireAuth, getOrder);
-router.get("/", requireAuth, listUserOrders);
+router.get("/:phone", requireAuth, listUserOrders)
 router.post("/:id/cancel", requireAuth, cancelOrder);
 
 export default router;

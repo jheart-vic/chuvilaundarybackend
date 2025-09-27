@@ -142,7 +142,7 @@ export const createOrderSchema = Joi.object({
   userName: Joi.string().min(1).max(200).optional(),
 
   serviceTier: Joi.string()
-    .valid("STANDARD", "PREMIUM", "DELUXE")
+    .valid("STANDARD", "PREMIUM", "SIGNATURE", "EXPRESS")
     .optional(),
 
   items: Joi.array().items(

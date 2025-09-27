@@ -207,90 +207,141 @@ dotenv.config();
 
 // seedServicePricing();
 
-import mongoose from "mongoose"
-import Order from "./models/Order.js" // adjust path
-import User from "./models/User.js"   // adjust path
+// import mongoose from "mongoose"
+// import Order from "./models/Order.js" // adjust path
+// import User from "./models/User.js"   // adjust path
 
 
-async function seed() {
+// async function seed() {
+//   try {
+//     await mongoose.connect(process.env.MONGO_URI)
+//     console.log("Connected to MongoDB ✅")
+
+//     const userPhone = "+2347083896876"
+
+//     // Ensure user exists
+//     let user = await User.findOne({ phone: userPhone })
+//     if (!user) {
+//       user = await User.create({
+//         phone: userPhone,
+//         name: "Victor Test"
+//       })
+//       console.log("Created test user")
+//     }
+
+//     const order = await Order.create({
+//       userPhone,
+//       userName: "Victor Test",
+//       items: [
+//         {
+//           serviceCode: "WASHFOLD01",
+//           serviceName: "Wash & Fold",
+//           quantity: 3,
+//           unit: "pcs",
+//           itemNotes: "Handle gently",
+//           price: 800,
+//           addOns: []
+//         },
+//         {
+//           serviceCode: "WASHFOLD01",
+//           serviceName: "Wash & Fold",
+//           quantity: 2,
+//           unit: "pcs",
+//           price: 800,
+//           express: true,
+//           addOns: [{ key: "STARCH", name: "Extra Starch", price: 200 }]
+//         }
+//       ],
+//       notes: "Seeded order",
+//       pickup: {
+//         date: new Date("2025-09-28T09:00:00.000Z"),
+//         window: "9am-12pm",
+//         address: {
+//           line1: "12 Arthur Eze Avenue",
+//           line2: "Flat 2B",
+//           city: "Awka",
+//           state: "Anambra",
+//           landmark: "Close to Temp site",
+//           zone: "zone1"
+//         }
+//       },
+//       delivery: {
+//         date: new Date("2025-09-30T15:00:00.000Z"),
+//         window: "3pm-6pm",
+//         address: {
+//           line1: "12 Arthur Eze Avenue",
+//           line2: "Flat 2B",
+//           city: "Awka",
+//           state: "Anambra",
+//           landmark: "Close to Temp site",
+//           zone: "zone1"
+//         }
+//       },
+//       pricingModel: "RETAIL",
+//       serviceTier: "PREMIUM",   // 👈 key line for your debugging
+//       slaHours: 48,
+//       expectedReadyAt: new Date("2025-09-30T09:00:00.000Z"),
+//       status: "Booked",
+//       history: [{ status: "Booked", note: "Seed order created" }]
+//     })
+
+//     console.log("✅ Seeded order:", order._id)
+//   } catch (err) {
+//     console.error("Seed error:", err)
+//   } finally {
+//     await mongoose.disconnect()
+//   }
+// }
+
+// seed()
+
+
+import mongoose from "mongoose";
+
+import User from "./models/User.js";
+import Subscription from "./models/Subscription.js";
+
+
+const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/laundry";
+
+const seedSubscription = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI)
-    console.log("Connected to MongoDB ✅")
+    await mongoose.connect(MONGO_URI);
+    console.log("MongoDB connected");
 
-    const userPhone = "+2347083896876"
-
-    // Ensure user exists
-    let user = await User.findOne({ phone: userPhone })
+    // 1️⃣ Find the user
+    const user = await User.findOne({ phone: "+2347083896876" });
     if (!user) {
-      user = await User.create({
-        phone: userPhone,
-        name: "Victor Test"
-      })
-      console.log("Created test user")
+      console.log("User not found");
+      return;
     }
 
-    const order = await Order.create({
-      userPhone,
-      userName: "Victor Test",
-      items: [
-        {
-          serviceCode: "WASHFOLD01",
-          serviceName: "Wash & Fold",
-          quantity: 3,
-          unit: "pcs",
-          itemNotes: "Handle gently",
-          price: 800,
-          addOns: []
-        },
-        {
-          serviceCode: "WASHFOLD01",
-          serviceName: "Wash & Fold",
-          quantity: 2,
-          unit: "pcs",
-          price: 800,
-          express: true,
-          addOns: [{ key: "STARCH", name: "Extra Starch", price: 200 }]
-        }
-      ],
-      notes: "Seeded order",
-      pickup: {
-        date: new Date("2025-09-28T09:00:00.000Z"),
-        window: "9am-12pm",
-        address: {
-          line1: "12 Arthur Eze Avenue",
-          line2: "Flat 2B",
-          city: "Awka",
-          state: "Anambra",
-          landmark: "Close to Temp site",
-          zone: "zone1"
-        }
-      },
-      delivery: {
-        date: new Date("2025-09-30T15:00:00.000Z"),
-        window: "3pm-6pm",
-        address: {
-          line1: "12 Arthur Eze Avenue",
-          line2: "Flat 2B",
-          city: "Awka",
-          state: "Anambra",
-          landmark: "Close to Temp site",
-          zone: "zone1"
-        }
-      },
-      pricingModel: "RETAIL",
-      serviceTier: "PREMIUM",   // 👈 key line for your debugging
-      slaHours: 48,
-      expectedReadyAt: new Date("2025-09-30T09:00:00.000Z"),
-      status: "Booked",
-      history: [{ status: "Booked", note: "Seed order created" }]
-    })
+    // 2️⃣ Create subscription
+    const subscription = new Subscription({
+      customer: user._id,
+      plan_code: "PREM_CHOICE_24",
+      status: "ACTIVE",
+      start_date: new Date(),
+      renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      rollover_cap_pct: 25,
+      rollover_balance: 0,
+      pause_count_qtr: 0,
+      delivery_zone_status: "INSIDE",
+    });
 
-    console.log("✅ Seeded order:", order._id)
+    await subscription.save();
+    console.log("Subscription created:", subscription._id);
+
+    // 3️⃣ Update user
+    user.currentSubscription = subscription._id;
+    await user.save();
+
+    console.log("User updated with currentSubscription");
+    process.exit(0);
   } catch (err) {
-    console.error("Seed error:", err)
-  } finally {
-    await mongoose.disconnect()
+    console.error(err);
+    process.exit(1);
   }
-}
+};
 
-seed()
+seedSubscription();
