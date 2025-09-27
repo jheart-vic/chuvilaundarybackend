@@ -13,22 +13,30 @@ export const applyCoupon = async (req, res, next) => {
     if (!coupon)
       return res.status(404).json({ message: "Coupon not found" });
 
-if (coupon.expiresAt) {
-  const couponExpires = DateTime.fromJSDate(coupon.expiresAt).setZone('Africa/Lagos');
-  if (DateTime.now().setZone('Africa/Lagos') > couponExpires) {
-      return res.status(400).json({ message: "Coupon expired" });
-  }
-}
-    // if (coupon.expiresAt && new Date() > coupon.expiresAt)
-    //   return res.status(400).json({ message: "Coupon expired" });
+    // ✅ Check if coupon is active
+    if (!coupon.isActive) {
+      return res.status(400).json({ message: "Coupon is inactive" });
+    }
 
-    if (coupon.maxUses && coupon.uses >= coupon.maxUses)
+    // ✅ Check expiry date
+    if (coupon.expiresAt) {
+      const couponExpires = DateTime.fromJSDate(coupon.expiresAt).setZone("Africa/Lagos");
+      if (DateTime.now().setZone("Africa/Lagos") > couponExpires) {
+        return res.status(400).json({ message: "Coupon expired" });
+      }
+    }
+
+    // ✅ Check max uses
+    if (coupon.maxUses && coupon.uses >= coupon.maxUses) {
       return res.status(400).json({ message: "Coupon usage limit reached" });
+    }
 
-    if (coupon.minOrderValue && subtotal < coupon.minOrderValue)
+    // ✅ Check minimum order
+    if (coupon.minOrderValue && subtotal < coupon.minOrderValue) {
       return res.status(400).json({ message: `Minimum order value is ₦${coupon.minOrderValue}` });
+    }
 
-    // Calculate discount
+    // ✅ Calculate discount
     let discount = 0;
     if (coupon.discountPercent)
       discount += (coupon.discountPercent / 100) * subtotal;
@@ -48,8 +56,9 @@ if (coupon.expiresAt) {
         discountAmount: coupon.discountAmount,
         expiresAt: coupon.expiresAt,
         maxUses: coupon.maxUses,
-        uses: coupon.uses
-      }
+        uses: coupon.uses,
+        isActive: coupon.isActive,
+      },
     });
   } catch (err) {
     console.error("Apply coupon error:", err);

@@ -14,7 +14,7 @@ const CouponSchema = new mongoose.Schema({
     redeemedAt: { type: Date, default: Date.now },
   },
 ],
-
+  isActive: { type: Boolean, default: true }, // ✅ new field
   uses: { type: Number, default: 0 }
 }, { timestamps: true });
 

@@ -151,58 +151,146 @@ dotenv.config();
 // seed();
 
 
-// scripts/seedServicePricing.js
-import mongoose from "mongoose";
-import ServicePricing from "./models/ServicePricing.js";
-import Service from "./models/Service.js";
+// // scripts/seedServicePricing.js
+// import mongoose from "mongoose";
+// import ServicePricing from "./models/ServicePricing.js";
+// import Service from "./models/Service.js";
 
 
 
-async function seedServicePricing() {
+// async function seedServicePricing() {
+//   try {
+//     await mongoose.connect(process.env.MONGO_URI);
+//     console.log("✅ Connected to MongoDB");
+
+//     const services = await Service.find();
+//     console.log(`Found ${services.length} services`);
+
+//     for (const service of services) {
+//       const tiers = ["STANDARD", "PREMIUM", "SIGNATURE"]; // define your tiers
+
+//       for (const tier of tiers) {
+//         const exists = await ServicePricing.findOne({
+//           serviceCode: service.code,
+//           serviceTier: tier,
+//           pricingModel: "RETAIL",
+//         });
+
+//         if (!exists) {
+//           // 👇 define tier multipliers
+//           let price = service.basePrice || 1000;
+//           if (tier === "EXPRESS") price = Math.round(price * 1.5);
+//           if (tier === "DELUXE") price = Math.round(price * 2);
+
+//           await ServicePricing.create({
+//             serviceCode: service.code,
+//             serviceName: service.name,
+//             serviceTier: tier,
+//             pricingModel: "RETAIL",
+//             pricePerItem: price,
+//           });
+
+//           console.log(`➕ Added pricing for ${service.code} (${tier})`);
+//         } else {
+//           console.log(`✔️ Already has pricing for ${service.code} (${tier})`);
+//         }
+//       }
+//     }
+
+//     console.log("🎉 Seeding complete");
+//     process.exit(0);
+//   } catch (err) {
+//     console.error("❌ Error seeding:", err);
+//     process.exit(1);
+//   }
+// }
+
+// seedServicePricing();
+
+import mongoose from "mongoose"
+import Order from "./models/Order.js" // adjust path
+import User from "./models/User.js"   // adjust path
+
+
+async function seed() {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ Connected to MongoDB");
+    await mongoose.connect(process.env.MONGO_URI)
+    console.log("Connected to MongoDB ✅")
 
-    const services = await Service.find();
-    console.log(`Found ${services.length} services`);
+    const userPhone = "+2347083896876"
 
-    for (const service of services) {
-      const tiers = ["STANDARD", "PREMIUM", "SIGNATURE"]; // define your tiers
-
-      for (const tier of tiers) {
-        const exists = await ServicePricing.findOne({
-          serviceCode: service.code,
-          serviceTier: tier,
-          pricingModel: "RETAIL",
-        });
-
-        if (!exists) {
-          // 👇 define tier multipliers
-          let price = service.basePrice || 1000;
-          if (tier === "EXPRESS") price = Math.round(price * 1.5);
-          if (tier === "DELUXE") price = Math.round(price * 2);
-
-          await ServicePricing.create({
-            serviceCode: service.code,
-            serviceName: service.name,
-            serviceTier: tier,
-            pricingModel: "RETAIL",
-            pricePerItem: price,
-          });
-
-          console.log(`➕ Added pricing for ${service.code} (${tier})`);
-        } else {
-          console.log(`✔️ Already has pricing for ${service.code} (${tier})`);
-        }
-      }
+    // Ensure user exists
+    let user = await User.findOne({ phone: userPhone })
+    if (!user) {
+      user = await User.create({
+        phone: userPhone,
+        name: "Victor Test"
+      })
+      console.log("Created test user")
     }
 
-    console.log("🎉 Seeding complete");
-    process.exit(0);
+    const order = await Order.create({
+      userPhone,
+      userName: "Victor Test",
+      items: [
+        {
+          serviceCode: "WASHFOLD01",
+          serviceName: "Wash & Fold",
+          quantity: 3,
+          unit: "pcs",
+          itemNotes: "Handle gently",
+          price: 800,
+          addOns: []
+        },
+        {
+          serviceCode: "WASHFOLD01",
+          serviceName: "Wash & Fold",
+          quantity: 2,
+          unit: "pcs",
+          price: 800,
+          express: true,
+          addOns: [{ key: "STARCH", name: "Extra Starch", price: 200 }]
+        }
+      ],
+      notes: "Seeded order",
+      pickup: {
+        date: new Date("2025-09-28T09:00:00.000Z"),
+        window: "9am-12pm",
+        address: {
+          line1: "12 Arthur Eze Avenue",
+          line2: "Flat 2B",
+          city: "Awka",
+          state: "Anambra",
+          landmark: "Close to Temp site",
+          zone: "zone1"
+        }
+      },
+      delivery: {
+        date: new Date("2025-09-30T15:00:00.000Z"),
+        window: "3pm-6pm",
+        address: {
+          line1: "12 Arthur Eze Avenue",
+          line2: "Flat 2B",
+          city: "Awka",
+          state: "Anambra",
+          landmark: "Close to Temp site",
+          zone: "zone1"
+        }
+      },
+      pricingModel: "RETAIL",
+      serviceTier: "PREMIUM",   // 👈 key line for your debugging
+      slaHours: 48,
+      expectedReadyAt: new Date("2025-09-30T09:00:00.000Z"),
+      status: "Booked",
+      history: [{ status: "Booked", note: "Seed order created" }]
+    })
+
+    console.log("✅ Seeded order:", order._id)
   } catch (err) {
-    console.error("❌ Error seeding:", err);
-    process.exit(1);
+    console.error("Seed error:", err)
+  } finally {
+    await mongoose.disconnect()
   }
 }
 
-seedServicePricing();
+seed()

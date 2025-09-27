@@ -113,6 +113,16 @@ export const createEmployee = async (req, res, next) => {
   }
 };
 
+// list all employees (admin only)
+export const listEmployees = async (req, res, next) => {
+  try {
+    const employees = await User.find({ role: "employee" }).sort({ createdAt: -1 });
+    res.json(employees);
+  } catch (err) {
+    next(err);
+  }
+
+};
 /** admin update order status (any status including cancel) */
 export const adminUpdateOrderStatus = async (req, res, next) => {
   try {
@@ -129,7 +139,7 @@ export const adminUpdateOrderStatus = async (req, res, next) => {
 /** admin create coupon */
 export const createCoupon = async (req, res, next) => {
   try {
-    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses } = req.body;
+    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses, isActive } = req.body;
 
     if (!code) return res.status(400).json({ message: "Coupon code is required" });
     if (!discountPercent && !discountAmount)
@@ -146,14 +156,16 @@ export const createCoupon = async (req, res, next) => {
       expiresAt,
       minOrderValue,
       maxUses,
+      isActive: isActive !== undefined ? isActive : true, // ✅ default true
     });
 
     res.status(201).json({ message: "Coupon created successfully", coupon });
   } catch (err) {
-   console.error(err);
+    console.error(err);
     next(err);
   }
 };
+
 
 /** GET all coupons (admin only) */
 export const getCoupons = async (req, res, next) => {
@@ -179,7 +191,7 @@ export const getCouponById = async (req, res, next) => {
 /** UPDATE coupon (admin only) */
 export const updateCoupon = async (req, res, next) => {
   try {
-    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses } = req.body;
+    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses, isActive } = req.body;
 
     const coupon = await Coupon.findById(req.params.id);
     if (!coupon) return res.status(404).json({ message: "Coupon not found" });
@@ -190,6 +202,7 @@ export const updateCoupon = async (req, res, next) => {
     if (expiresAt !== undefined) coupon.expiresAt = expiresAt;
     if (minOrderValue !== undefined) coupon.minOrderValue = minOrderValue;
     if (maxUses !== undefined) coupon.maxUses = maxUses;
+    if (isActive !== undefined) coupon.isActive = isActive; // ✅ admin toggle
 
     await coupon.save();
     res.json({ message: "Coupon updated", coupon });
@@ -197,6 +210,7 @@ export const updateCoupon = async (req, res, next) => {
     next(err);
   }
 };
+
 
 /** DELETE coupon (admin only) */
 export const deleteCoupon = async (req, res, next) => {
@@ -208,5 +222,3 @@ export const deleteCoupon = async (req, res, next) => {
     next(err);
   }
 };
-
-
