@@ -70,21 +70,17 @@ export const adminLogin = async (req, res) => {
   res.json({ user, token });
 };
 
-// create an employee user (admin only)
 export const createEmployee = async (req, res, next) => {
   try {
     const { phone, fullName } = req.body;
     if (!phone || !fullName)
       return res.status(400).json({ message: "phone & name required" });
 
-    let user = await User.findOne({ phone });
-
-    // If user exists, update role & name
-    if (user) {
-      user.role = "employee";
-      user.fullName = fullName;
-      await user.save();
-      return res.status(200).json(user);
+    const existingUser = await User.findOne({ phone });
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ message: "User with this phone already exists" });
     }
 
     // Generate a unique default password
@@ -94,7 +90,7 @@ export const createEmployee = async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
     // Create new employee
-    user = await User.create({
+    const user = await User.create({
       phone,
       fullName,
       role: "employee",
@@ -105,6 +101,7 @@ export const createEmployee = async (req, res, next) => {
 
     // Return user and generated password
     res.status(201).json({
+      message: "Employee created successfully",
       user,
       defaultPassword,
     });
@@ -112,6 +109,7 @@ export const createEmployee = async (req, res, next) => {
     next(err);
   }
 };
+
 
 // list all employees (admin only)
 export const listEmployees = async (req, res, next) => {
@@ -191,21 +189,46 @@ export const getCouponById = async (req, res, next) => {
 /** UPDATE coupon (admin only) */
 export const updateCoupon = async (req, res, next) => {
   try {
-    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses, isActive } = req.body;
+    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses } = req.body;
 
     const coupon = await Coupon.findById(req.params.id);
     if (!coupon) return res.status(404).json({ message: "Coupon not found" });
 
-    if (code) coupon.code = code.toUpperCase();
+    // ✅ unique code check
+    if (code && code.toUpperCase() !== coupon.code) {
+      const exists = await Coupon.findOne({ code: code.toUpperCase() });
+      if (exists) return res.status(400).json({ message: "Coupon code already exists" });
+      coupon.code = code.toUpperCase();
+    }
+
     if (discountPercent !== undefined) coupon.discountPercent = discountPercent;
     if (discountAmount !== undefined) coupon.discountAmount = discountAmount;
     if (expiresAt !== undefined) coupon.expiresAt = expiresAt;
     if (minOrderValue !== undefined) coupon.minOrderValue = minOrderValue;
     if (maxUses !== undefined) coupon.maxUses = maxUses;
-    if (isActive !== undefined) coupon.isActive = isActive; // ✅ admin toggle
 
     await coupon.save();
-    res.json({ message: "Coupon updated", coupon });
+    res.json({ message: "Coupon updated successfully", coupon });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+
+/** Toggle coupon isActive (admin only) */
+export const toggleCouponActive = async (req, res, next) => {
+  try {
+    const coupon = await Coupon.findById(req.params.id);
+    if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+
+    coupon.isActive = !coupon.isActive; // ✅ flip the boolean
+    await coupon.save();
+
+    res.json({
+      message: `Coupon is now ${coupon.isActive ? "active" : "inactive"}`,
+      coupon,
+    });
   } catch (err) {
     next(err);
   }

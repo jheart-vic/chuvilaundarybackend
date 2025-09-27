@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createEmployee, adminUpdateOrderStatus, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees } from "../controllers/adminController.js";
+import { createEmployee, adminUpdateOrderStatus, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive } from "../controllers/adminController.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { requireAuth, requireAdmin, requireEmployeeOrAdmin } from "../middlewares/authMiddleware.js";
 import { adminLoginSchema, adminRegisterSchema, createCouponSchema, createEmployeeSchema, updateStatusSchema } from "../utils/validator.js";
@@ -20,7 +20,9 @@ router.patch("/orders/:id/status",requireAuth, requireEmployeeOrAdmin, validateB
 router.post("/create/coupons", requireAuth, requireAdmin, validateBody(createCouponSchema), createCoupon);
 router.get("/coupons",requireAuth, requireAdmin, getCoupons);
 router.get("/coupons/:id",requireAuth, requireAdmin, getCouponById);
-router.put("/coupons/:id",requireAuth, requireAdmin, validateBody(createCouponSchema), updateCoupon);
+router.put("/coupons/:id",requireAuth, requireAdmin, updateCoupon);
+router.patch("/coupons/:id/toggle",requireAuth,requireAdmin,toggleCouponActive);
+
 router.delete("/coupons/:id",requireAuth, requireAdmin, deleteCoupon);
 
 router.post("/create/subcription-plan",requireAuth ,requireAdmin, async (req, res) => {
