@@ -141,6 +141,10 @@ export const createOrderSchema = Joi.object({
 
   userName: Joi.string().min(1).max(200).optional(),
 
+  serviceTier: Joi.string()
+    .valid("STANDARD", "PREMIUM", "DELUXE")
+    .optional(),
+
   items: Joi.array().items(
     Joi.object({
       serviceCode: Joi.string().required(),
@@ -168,7 +172,7 @@ export const createOrderSchema = Joi.object({
       city: Joi.string().required(),
       state: Joi.string().optional(),
       landmark: Joi.string().optional(),
-      zone: Joi.string().optional(), // used for fee calculation
+      zone: Joi.string().optional(),
     }).required(),
   }).required(),
 
@@ -190,10 +194,9 @@ export const createOrderSchema = Joi.object({
     .uppercase()
     .optional(),
 
-  // deliveryFee REMOVED – calculate server-side
-
   notes: Joi.string().allow("", null).optional(),
 });
+
 
 
 export const applyCouponSchema = Joi.object({
