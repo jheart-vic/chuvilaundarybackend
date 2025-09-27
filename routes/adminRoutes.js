@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createEmployee, adminUpdateOrderStatus, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive } from "../controllers/adminController.js";
+import { createEmployee, adminUpdateOrderStatus, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive, deleteEmployee } from "../controllers/adminController.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { requireAuth, requireAdmin, requireEmployeeOrAdmin } from "../middlewares/authMiddleware.js";
 import { adminLoginSchema, adminRegisterSchema, createCouponSchema, createEmployeeSchema, updateStatusSchema } from "../utils/validator.js";
@@ -14,6 +14,7 @@ router.post("/register", validateBody(adminRegisterSchema), adminRegister);
 router.post("/login", validateBody(adminLoginSchema), adminLogin);
 router.post("/employees", requireAuth, requireAdmin, validateBody(createEmployeeSchema), createEmployee);
 router.get("/get-employees", requireAuth, requireAdmin, listEmployees);
+router.delete("/employees/:id", requireAuth, requireAdmin, deleteEmployee)
 router.patch("/orders/:id/status",requireAuth, requireEmployeeOrAdmin, validateBody(updateStatusSchema), adminUpdateOrderStatus);
 
 // ✅ create coupon

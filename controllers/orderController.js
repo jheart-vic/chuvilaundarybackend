@@ -1,26 +1,27 @@
-import Order from '../models/Order.js'
-import Coupon from '../models/Coupon.js'
-import { uploadToCloudinary } from '../middlewares/uploadMiddleware.js'
-import { Statuses } from '../models/Order.js'
-import { notifyOrderEvent } from '../services/notificationService.js'
-import { computeOrderTotals } from '../utils/orderTotals.js'
-import { computeExpectedReadyAt } from '../utils/slaHours.js'
-import User from '../models/User.js'
-import Subscription from '../models/Subscription.js'
-import SubscriptionPlan from '../models/SubscriptionPlan.js'
-import SubUsage from '../models/SubUsage.js'
-import { DateTime } from 'luxon'
+import Order from "../models/Order.js";
+import Coupon from "../models/Coupon.js";
+import { uploadToCloudinary } from "../middlewares/uploadMiddleware.js";
+import { Statuses } from "../models/Order.js";
+import { notifyOrderEvent } from "../services/notificationService.js";
+import { computeOrderTotals } from "../utils/orderTotals.js";
+import { computeExpectedReadyAt } from "../utils/slaHours.js";
+import User from "../models/User.js";
+// import Subscription from "../models/Subscription.js";
+import SubscriptionPlan from "../models/SubscriptionPlan.js";
+import SubUsage from "../models/SubUsage.js";
+import { DateTime } from "luxon";
 
 /**
  * Create order (req.files uploaded to Cloudinary)
  */
-
 export const createOrder = async (req, res, next) => {
-console.log("Raw req.body:", req.body);
+  console.log("Raw req.body:", req.body);
 
   try {
     const payload = req.body;
     const userPhone = req.user?.phone || payload.userPhone;
+
+    // ✅ Basic validation
     if (!userPhone)
       return res.status(400).json({ message: "userPhone required" });
     if (!payload.items?.length)
@@ -39,51 +40,46 @@ console.log("Raw req.body:", req.body);
       }
     }
 
-    // 2️⃣ Coupon normalization
+    // 2️⃣ Normalize coupon code
     const couponCode = payload.couponCode?.trim().toUpperCase() || null;
 
-    // 3️⃣ Subscription lookup (if any)
+    // 3️⃣ Check user subscription
     let plan = null;
     let usage = null;
     const user = await User.findOne({ phone: userPhone }).populate(
       "currentSubscription"
     );
 
-    if (user?.currentSubscription) {
-      const subscription = await Subscription.findById(
-        user.currentSubscription._id
+    const subscription = user?.currentSubscription;
+    if (subscription?.status === "ACTIVE") {
+      plan = await SubscriptionPlan.findOne({
+        code: subscription.plan_code,
+        active: true,
+      });
+
+      const periodLabel = DateTime.now().toFormat("yyyy-LL");
+      usage = await SubUsage.findOneAndUpdate(
+        { subscription: subscription._id, period_label: periodLabel },
+        {},
+        { new: true, upsert: true }
       );
-      if (subscription?.status === "ACTIVE") {
-        plan = await SubscriptionPlan.findOne({
-          code: subscription.plan_code,
-          active: true,
-        });
-
-        const periodLabel = DateTime.now().toFormat("yyyy-LL");
-        usage = await SubUsage.findOneAndUpdate(
-          { subscription: subscription._id, period_label: periodLabel },
-          {},
-          { new: true, upsert: true }
-        );
-      }
     }
-
-    // 🚨 Strict check: if client requests SUBSCRIPTION but user has none
-    if (payload.pricingModel === "SUBSCRIPTION" && !plan) {
-      return res
-        .status(400)
-        .json({ message: "User has no active subscription" });
-    }
-console.log("Incoming serviceTier:", payload.serviceTier);
 
     // 4️⃣ Determine pricing model
     const pricingModel =
       payload.pricingModel || (plan ? "SUBSCRIPTION" : "RETAIL");
 
-    // 5️⃣ Resolve serviceTier
+    // Strict check: user requested SUBSCRIPTION but has no active plan
+    if (pricingModel === "SUBSCRIPTION" && !plan) {
+      return res
+        .status(400)
+        .json({ message: "Active subscription plan not found" });
+    }
+
+    // 5️⃣ Resolve service tier
     const serviceTier =
       pricingModel === "SUBSCRIPTION"
-        ? plan?.serviceTier || "STANDARD"
+        ? plan?.tier || "STANDARD"
         : payload.serviceTier?.toUpperCase() || "STANDARD";
 
     console.log("Resolved serviceTier:", serviceTier);
@@ -96,17 +92,16 @@ console.log("Incoming serviceTier:", payload.serviceTier);
         pricingModel,
         subscriptionPlanCode: plan?.code,
         userPhone,
-        serviceTier, // ✅ resolved value always wins
+        serviceTier,
       },
       { plan, usage }
     );
 
-    // 7️⃣ SLA calculation (always use util)
+    // 7️⃣ SLA calculation
     const hasExpress = payload.items.some((i) => i.express);
-
     const expectedReadyAt = computeExpectedReadyAt(
       new Date(payload.pickup.date),
-      serviceTier, // ✅ always use resolved serviceTier
+      serviceTier,
       { express: hasExpress }
     );
 
@@ -118,7 +113,7 @@ console.log("Incoming serviceTier:", payload.serviceTier);
     const order = await Order.create({
       userPhone,
       userName: payload.userName,
-      items: payload.items, // ✅ items already have .price
+      items: payload.items,
       notes: payload.notes,
       photos,
       couponCode,
@@ -152,13 +147,17 @@ console.log("Incoming serviceTier:", payload.serviceTier);
       }
     }
 
+    // 10️⃣ Notify user
     await notifyOrderEvent({ user: req.user, order, type: "created" });
+
     res.status(201).json({ order });
   } catch (err) {
     console.error("Create order failed:", err);
     next(err);
   }
 };
+
+
 
 export const getOrder = async (req, res, next) => {
   try {

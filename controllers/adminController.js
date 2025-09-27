@@ -121,6 +121,17 @@ export const listEmployees = async (req, res, next) => {
   }
 
 };
+
+export const deleteEmployee = async (req, res, next) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /** admin update order status (any status including cancel) */
 export const adminUpdateOrderStatus = async (req, res, next) => {
   try {
