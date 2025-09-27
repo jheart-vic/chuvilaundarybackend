@@ -10,6 +10,7 @@ import {
   resetPasswordSchema
 } from '../utils/validator.js'
 import { sendSMS } from '../services/notificationService.js'
+import Notification from '../models/Notification.js'
 
 // Normalize phone to E.164 format for Nigeria (+234)
 const normalizePhone = phone => {
