@@ -8,6 +8,7 @@ import adminRoutes from "./adminRoutes.js";
 import notificationRoutes from './notificationRoutes.js';
 import reviewRoutes from "./reviewRoutes.js";
 import subscriptionRoutes from "./subcriptionRoutes.js";
+import issueRoutes from "./issueRoutes.js";
 
 
 const router = Router();
@@ -21,6 +22,6 @@ router.use("/admin", adminRoutes);
 router.use("/reviews", reviewRoutes);
 router.use('/api/notifications', notificationRoutes);
 router.use('/subscriptions', subscriptionRoutes);
-router
+router.use("/issues", issueRoutes);
 
 export default router;

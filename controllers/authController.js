@@ -9,7 +9,7 @@ import {
   resendCodeSchema,
   resetPasswordSchema
 } from '../utils/validator.js'
-import { sendSMS } from '../services/notificationService.js'
+import { sendEmail, sendSMS } from '../services/notificationService.js'
 import Notification from '../models/Notification.js'
 
 // Normalize phone to E.164 format for Nigeria (+234)
@@ -119,6 +119,8 @@ export const register = async (req, res) => {
     // ✅ Try sending OTP via Termii
     try {
       await sendSMS(normalizedPhone, `Your verification code is ${verificationCode}`);
+      await sendEmail(email, 'Your Verification Code', `<p>Your new verification code is <strong>${code}</strong></p>`);
+
     } catch (smsErr) {
       console.error("OTP SMS failed:", smsErr.message);
       // ❌ Rollback (delete the user) to avoid dangling accounts
@@ -135,6 +137,7 @@ export const register = async (req, res) => {
         _id: newUser._id,
         fullName: newUser.fullName,
         phone: newUser.phone,
+        email: newUser.email,
         referralCode: newUser.referralCode,
         referredBy: newUser.referredBy,
         isVerified: newUser.isVerified,
@@ -262,6 +265,7 @@ export const resendSMS = async (req, res) => {
     await user.save()
 
     await sendSMS(normalizedPhone, `Your new verification code is ${code}`)
+await sendEmail(user.email, 'Your Verification Code', `<p>Your new verification code is <strong>${code}</strong></p>`);
     res.json({ message: 'Verification code resent' })
   } catch (err) {
     console.error('Resend code error:', err)

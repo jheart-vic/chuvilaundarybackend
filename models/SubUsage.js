@@ -12,6 +12,7 @@ const subUsageSchema = new mongoose.Schema(
     trips_used: { type: Number, default: 0 },
     overage_items: { type: Number, default: 0 },
     express_orders_used: { type: Number, default: 0 },
+    sameDay_orders_used: { type: Number, default: 0 },
     computed_overage_fee_ngn: { type: Number, default: 0 },
     on_time_pct: { type: Number, default: 100 }
   },

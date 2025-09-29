@@ -21,6 +21,7 @@ const subscriptionPlanSchema = new mongoose.Schema(
     // SLA & express
     sla_hours: { type: Number, required: true, default: 48 }, // standard SLA per tier
     express_multiplier: { type: Number, default: 1.2 }, // surcharge for express service
+    sameDay_multiplier: { type: Number, default: 1.8 }, // surcharge for same-day service
     priority_overhead_per_item_ngn: { type: Number, default: 0 }, // extra per express item
 
     // Delivery policy

@@ -145,23 +145,30 @@ export const createOrderSchema = Joi.object({
     .valid("STANDARD", "PREMIUM", "SIGNATURE", "EXPRESS")
     .optional(),
 
-  items: Joi.array().items(
-    Joi.object({
-      serviceCode: Joi.string().required(),
-      serviceName: Joi.string().required(),
-      quantity: Joi.number().integer().min(1).required(),
-      price: Joi.number().min(0).optional(),
-      unit: Joi.string().optional(),
-      itemNotes: Joi.string().optional(),
-      addOns: Joi.array().items(
-        Joi.object({
-          key: Joi.string().optional(),
-          name: Joi.string().optional(),
-          price: Joi.number().min(0).optional(),
-        })
-      ).optional(),
-    })
-  ).min(1).required(),
+  items: Joi.array()
+    .items(
+      Joi.object({
+        serviceCode: Joi.string().required(),
+        serviceName: Joi.string().required(),
+        quantity: Joi.number().integer().min(1).required(),
+        price: Joi.number().min(0).optional(),
+        unit: Joi.string().optional(),
+        itemNotes: Joi.string().optional(),
+        addOns: Joi.array()
+          .items(
+            Joi.object({
+              key: Joi.string().optional(),
+              name: Joi.string().optional(),
+              price: Joi.number().min(0).optional(),
+            })
+          )
+          .optional(),
+        express: Joi.boolean().optional(),
+        sameDay: Joi.boolean().optional(),
+      })
+    )
+    .min(1)
+    .required(),
 
   pickup: Joi.object({
     date: Joi.date().required(),
@@ -189,15 +196,24 @@ export const createOrderSchema = Joi.object({
     }).required(),
   }).required(),
 
-  couponCode: Joi.string()
-    .trim()
-    .uppercase()
-    .optional(),
+  couponCode: Joi.string().trim().uppercase().optional(),
 
   notes: Joi.string().allow("", null).optional(),
+  express: Joi.boolean().optional(),
+  sameDay: Joi.boolean().optional(),
+}).custom((value, helpers) => {
+  const sameDayCount = value.items
+    .filter((i) => i.sameDay || value.sameDay)
+    .reduce((sum, i) => sum + (i.quantity || 0), 0);
+
+  if (sameDayCount > 15) {
+    return helpers.error("any.invalid", {
+      message: "Same-day service is limited to 15 items per order",
+    });
+  }
+
+  return value;
 });
-
-
 
 export const applyCouponSchema = Joi.object({
   code: Joi.string().required(),
@@ -285,3 +301,14 @@ export const createCouponSchema = Joi.object({
   .messages({
     "object.missing": "Provide either discountPercent or discountAmount",
   });
+
+export const createIssueSchema = Joi.object({
+  name: Joi.string().min(2).max(100).required(),
+  phone: Joi.string()
+    .pattern(/^\+?[0-9]{10,15}$/) // E.164 format
+    .required(),
+  order: Joi.string()
+    .optional() // not all issues must be tied to an order
+    .allow(null, ""),
+  message: Joi.string().min(5).max(1000).required()
+});

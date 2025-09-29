@@ -2,8 +2,8 @@ import mongoose from "mongoose";
 
 const ServicePricingSchema = new mongoose.Schema(
   {
-    serviceCode: { type: String, required: true }, // e.g. "SHIRT01"
-    serviceName: { type: String, required: true }, // e.g. "Shirt"
+    serviceCode: { type: String, required: true },
+    serviceName: { type: String, required: true },
 
     pricingModel: {
       type: String,
@@ -17,7 +17,10 @@ const ServicePricingSchema = new mongoose.Schema(
     },
 
     pricePerItem: { type: Number, required: true },
+
+    // Multipliers
     expressMultiplier: { type: Number, default: 1.5 },
+    sameDayMultiplier: { type: Number, default: 1.8 },
 
     // Delivery rules (retail differs from subscription)
     delivery_km_included: { type: Number, default: 0 },

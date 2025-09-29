@@ -296,52 +296,84 @@ dotenv.config();
 // seed()
 
 
-import mongoose from "mongoose";
+// import mongoose from "mongoose";
 
-import User from "./models/User.js";
-import Subscription from "./models/Subscription.js";
+// import User from "./models/User.js";
+// import Subscription from "./models/Subscription.js";
 
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/laundry";
+// const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/laundry";
 
-const seedSubscription = async () => {
+// const seedSubscription = async () => {
+//   try {
+//     await mongoose.connect(MONGO_URI);
+//     console.log("MongoDB connected");
+
+//     // 1️⃣ Find the user
+//     const user = await User.findOne({ phone: "+2347083896876" });
+//     if (!user) {
+//       console.log("User not found");
+//       return;
+//     }
+
+//     // 2️⃣ Create subscription
+//     const subscription = new Subscription({
+//       customer: user._id,
+//       plan_code: "PREM_CHOICE_24",
+//       status: "ACTIVE",
+//       start_date: new Date(),
+//       renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+//       rollover_cap_pct: 25,
+//       rollover_balance: 0,
+//       pause_count_qtr: 0,
+//       delivery_zone_status: "INSIDE",
+//     });
+
+//     await subscription.save();
+//     console.log("Subscription created:", subscription._id);
+
+//     // 3️⃣ Update user
+//     user.currentSubscription = subscription._id;
+//     await user.save();
+
+//     console.log("User updated with currentSubscription");
+//     process.exit(0);
+//   } catch (err) {
+//     console.error(err);
+//     process.exit(1);
+//   }
+// };
+
+// seedSubscription();
+
+
+import nodemailer from "nodemailer";
+
+
+async function main() {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: false, // true if you switch to port 465
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    tls: { rejectUnauthorized: false },
+  });
+
   try {
-    await mongoose.connect(MONGO_URI);
-    console.log("MongoDB connected");
-
-    // 1️⃣ Find the user
-    const user = await User.findOne({ phone: "+2347083896876" });
-    if (!user) {
-      console.log("User not found");
-      return;
-    }
-
-    // 2️⃣ Create subscription
-    const subscription = new Subscription({
-      customer: user._id,
-      plan_code: "PREM_CHOICE_24",
-      status: "ACTIVE",
-      start_date: new Date(),
-      renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      rollover_cap_pct: 25,
-      rollover_balance: 0,
-      pause_count_qtr: 0,
-      delivery_zone_status: "INSIDE",
+    const info = await transporter.sendMail({
+      from: `"${process.env.APP_NAME}" <${process.env.SMTP_USER}>`,
+      to: "adebowalevictorjheart@gmail.com", // replace with your own address to test
+      subject: "SMTP Local Test",
+      html: "<p>Hello 🚀 — this is a test from Chuvilu Laundry</p>",
     });
 
-    await subscription.save();
-    console.log("Subscription created:", subscription._id);
-
-    // 3️⃣ Update user
-    user.currentSubscription = subscription._id;
-    await user.save();
-
-    console.log("User updated with currentSubscription");
-    process.exit(0);
+    console.log("✅ Message sent:", info.messageId);
   } catch (err) {
-    console.error(err);
-    process.exit(1);
+    console.error("❌ Error sending:", err.message);
   }
-};
+}
 
-seedSubscription();
+main();

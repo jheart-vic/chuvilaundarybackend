@@ -8,7 +8,9 @@ const OrderItemSchema = new mongoose.Schema(
     unit: String,
     itemNotes: String,
     addOns: [{ key: String, name: String, price: Number }],
-    price: Number
+    price: Number,
+    express: { type: Boolean, default: false },   // per-item express
+    sameDay: { type: Boolean, default: false }    // per-item same-day
   },
   { _id: false }
 )
@@ -31,6 +33,9 @@ const OrderSchema = new mongoose.Schema(
     notes: String,
     photos: [String],
     couponCode: String,
+    express: { type: Boolean, default: false },
+    sameDay: { type: Boolean, default: false },
+
     totals: {
       itemsTotal: Number,
       addOnsTotal: Number,
@@ -69,6 +74,7 @@ const OrderSchema = new mongoose.Schema(
       { status: String, note: String, at: { type: Date, default: Date.now } }
     ],
     rating: { type: Number, min: 1, max: 5, default: null },
+    reviewCount: { type: Number, default: 0 },
     pricingModel: {
       type: String,
       enum: ['RETAIL', 'SUBSCRIPTION'],
