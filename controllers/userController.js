@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import bcrypt from 'bcryptjs'
 import { resolveZone } from "../utils/addressChecker.js";
 import { DateTime } from 'luxon';
 
