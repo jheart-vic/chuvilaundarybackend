@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { changePassword, getAddresses, getProfile, joinMembership, leaveMembership, saveAddress, updateAddress, updatePreferences, updateProfile } from "../controllers/userController.js";
+import { changePassword, getAddresses, getProfile, getReferralInfo, joinMembership, leaveMembership, saveAddress, updateAddress, updatePreferences, updateProfile } from "../controllers/userController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { saveAddressSchema } from "../utils/validator.js";
@@ -18,5 +18,8 @@ router.post('/membership/join', requireAuth, joinMembership);
 // Route to leave membership
 router.post('/membership/leave',requireAuth, leaveMembership);
 router.patch("/me/preferences", requireAuth, updatePreferences);
+
+//Referal link
+router.get('/refer', requireAuth, getReferralInfo)
 
 export default router;

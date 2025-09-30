@@ -209,9 +209,6 @@ export const leaveMembership = async (req, res, next) => {
   }
 };
 
-/**
- * Update profile (name, email, phone)
- */
 export const updateProfile = async (req, res, next) => {
   try {
     const { fullName, email, phone } = req.body;
@@ -263,3 +260,21 @@ export const changePassword = async (req, res, next) => {
     next(err);
   }
 };
+
+export const getReferralInfo = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('referralCode')
+
+    if (!user || !user.referralCode) {
+      return res.status(404).json({ error: 'Referral code not found' })
+    }
+
+    const referralLink = `https://chuvi-app-5sky.vercel.app/register?code=${user.referralCode}`
+
+
+    res.json({ referralCode: user.referralCode, referralLink })
+  } catch (err) {
+    console.error('Error generating referral info:', err)
+    res.status(500).json({ error: 'Failed to fetch referral info' })
+  }
+}
