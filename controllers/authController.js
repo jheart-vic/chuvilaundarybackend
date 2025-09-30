@@ -119,7 +119,7 @@ export const register = async (req, res) => {
     // ✅ Try sending OTP via Termii
     try {
       await sendSMS(normalizedPhone, `Your verification code is ${verificationCode}`);
-      await sendEmail(email, 'Your Verification Code', `<p>Your new verification code is <strong>${code}</strong></p>`);
+      await sendEmail(email, 'Your Verification Code', `<p>Your new verification code is <strong>${verificationCode}</strong></p>`);
 
     } catch (smsErr) {
       console.error("OTP SMS failed:", smsErr.message);

@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 const ServicePricingSchema = new mongoose.Schema(
   {
     serviceCode: { type: String, required: true },
-    serviceName: { type: String, required: true },
 
     pricingModel: {
       type: String,
