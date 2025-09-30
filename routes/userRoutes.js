@@ -3,6 +3,7 @@ import { changePassword, getAddresses, getProfile, getReferralInfo, joinMembersh
 import { requireAuth } from "../middlewares/authMiddleware.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { saveAddressSchema } from "../utils/validator.js";
+import { subscribe } from "../controllers/emailSubscriber.js";
 
 const router = Router();
 
@@ -21,5 +22,8 @@ router.patch("/me/preferences", requireAuth, updatePreferences);
 
 //Referal link
 router.get('/refer', requireAuth, getReferralInfo)
+
+// Email subscription
+router.post("/subscribe", subscribe);
 
 export default router;
