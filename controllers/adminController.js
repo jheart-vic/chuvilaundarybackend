@@ -111,6 +111,7 @@ export const createEmployee = async (req, res, next) => {
 };
 
 //list all orders (admin only)
+// controller
 export const listAllOrders = async (req, res, next) => {
   try {
     const { status, phone, page = 1, limit = 20 } = req.query;
@@ -126,21 +127,24 @@ export const listAllOrders = async (req, res, next) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
-      Order.countDocuments(filter)
+      Order.countDocuments(filter),
     ]);
+
+    const ordersData = orders.map((o) => o.toObject());
 
     res.json({
       total,
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / limit),
-      orders
+      orders: ordersData,
     });
   } catch (err) {
     console.error("Error in listAllOrders:", err);
     next(err);
   }
 };
+
 
 // list all employees (admin only)
 export const listEmployees = async (req, res, next) => {
@@ -161,19 +165,6 @@ export const deleteEmployee = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-};
-
-/** admin update order status (any status including cancel) */
-export const adminUpdateOrderStatus = async (req, res, next) => {
-  try {
-    const { status, note } = req.body;
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "order not found" });
-    order.status = status;
-    order.history.push({ status, note });
-    await order.save();
-    res.json(order);
-  } catch (err) { next(err); }
 };
 
 /** admin create coupon */
@@ -256,8 +247,6 @@ export const updateCoupon = async (req, res, next) => {
   }
 };
 
-
-
 /** Toggle coupon isActive (admin only) */
 export const toggleCouponActive = async (req, res, next) => {
   try {
@@ -276,13 +265,39 @@ export const toggleCouponActive = async (req, res, next) => {
   }
 };
 
-
 /** DELETE coupon (admin only) */
 export const deleteCoupon = async (req, res, next) => {
   try {
     const coupon = await Coupon.findByIdAndDelete(req.params.id);
     if (!coupon) return res.status(404).json({ message: "Coupon not found" });
     res.json({ message: "Coupon deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Admin cancels any order
+export const cancelOrderAdmin = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.id).populate("user");
+    if (!order) return res.status(404).json({ message: "order not found" });
+
+    order.status = "Cancelled";
+    order.history.push({
+      status: "Cancelled",
+      note: req.body.note || "Cancelled by admin"
+    });
+
+    await order.save();
+
+    // 🔔 Notify
+    await notifyOrderEvent({
+      user: order.user,
+      order,
+      type: "cancelled_admin"
+    });
+
+    res.json(order);
   } catch (err) {
     next(err);
   }

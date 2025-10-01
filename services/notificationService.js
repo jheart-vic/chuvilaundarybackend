@@ -62,27 +62,71 @@ export async function sendEmail (to, subject, html) {
   }
 }
 
-// --- Wrapper for Order Events ---
-export async function notifyOrderEvent ({ user, order, type }) {
-  const messageTemplates = {
-    created: `Hi ${user.name}, your order #${order._id} has been placed successfully!`,
-    pickupReminder: `Reminder: Our rider will pick up your laundry at ${order.pickupTime}.`,
-    statusUpdate: `Your order #${order._id} is now ${order.status}.`,
-    cancelled: `Your order #${order._id} has been cancelled by admin. Please contact support if this is unexpected.`
+export async function notifyOrderEvent({ user, order, type, extra = {} }) {
+  const templates = {
+    deliveryPin: "Your Chuvilaundry delivery PIN is {{pin}}. Share with our rider to collect your items safely.",
+    loginCode: "Your Chuvilaundry login code is {{code}}. Valid for 10 minutes, one-time use only.",
+    orderCreated: "Dear {{name}}, your laundry order has been received. Pickup/delivery window: {{window}}. Powered by Chuvilaundry.",
+    orderReady: "Dear {{name}}, your laundry order is ready. Delivery window: {{window}}. Powered by Chuvilaundry.",
+    orderDelivered: "Dear {{name}}, your laundry was delivered. Amount: ₦{{amount}}, Payment: {{method}}. Thank you for choosing Chuvilaundry.",
+    rescheduled: "Dear {{name}}, due to {{reason}}, your delivery is rescheduled to {{new_window}}. Thank you for your patience. – Chuvilaundry.",
+    feedback: "Dear {{name}}, how did we do? Rate your laundry service: {{feedback_link}}. Powered by Chuvilaundry.",
+    pickupReminder: "Reminder: Your laundry pickup is in 1 hour. Please have your items ready. – Chuvilaundry.",
+    processing: "Dear {{name}}, your laundry is now being processed. We’ll notify you when it’s ready. – Chuvilaundry.",
+    complaintReceived: "Dear {{name}}, we’ve received your complaint and are working on it. Resolution update coming soon. – Chuvilaundry.",
+
+    // ✅ Payment events
+    payment_success: "Dear {{name}}, your payment of ₦{{amount}} via {{method}} was successful. Thank you for using Chuvilaundry.",
+    payment_failed: "Dear {{name}}, your payment attempt of ₦{{amount}} via {{method}} has failed. Please try again or contact support. hello@chuvilaundry.com",
+
+  // ✅ Cancellation events
+    cancelled_admin: "Dear {{name}}, your laundry order was cancelled by Chuvilaundry support. Please contact us if you need further assistance. hello@chuvilaundry.com",
+    cancelled_user: "Dear {{name}}, you have successfully cancelled your laundry order. If this was a mistake, kindly place a new order."
+  };
+
+  // ✅ Map admin statuses → templates
+  const statusMap = {
+    Processing: "processing",
+    Ready: "orderReady",
+    Delivered: "orderDelivered",
+    Rescheduled: "rescheduled"
+  };
+
+  // If type = "statusUpdate", translate actual order.status → template key
+  if (type === "statusUpdate") {
+    const mappedType = statusMap[order?.status];
+    if (mappedType) type = mappedType;
   }
 
-  const message = messageTemplates[type]
-  if (!message) return
+  // Pick correct template
+  const template = templates[type];
+  if (!template) return;
 
-  // ✅ Save notification in DB
+  // Build context
+  const context = {
+    name: user?.name || "Customer",
+    window: order?.delivery?.window || order?.pickup?.window || "",
+    amount: extra.amount || order?.totals?.grandTotal || "",
+    method: extra.method || order?.payment?.method || "",
+    pin: extra.pin || "",
+    code: extra.code || "",
+    reason: extra.reason || "",
+    new_window: extra.new_window || "",
+    feedback_link: extra.feedback_link || ""
+  };
+
+  // Replace placeholders
+  const message = template.replace(/{{(.*?)}}/g, (_, key) => context[key.trim()] || "");
+
+  // ✅ Save notification
   await Notification.create({
     user: user._id || user.id,
     title: `Order ${type}`,
     message,
-    type: type === 'statusUpdate' ? 'status' : 'order'
-  })
+    type: ["payment_success", "payment_failed"].includes(type) ? "payment" : "order"
+  });
 
-  if (user.phone) await sendSMS(user.phone, message)
-  if (user.email)
-    await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`)
+  // ✅ Send via SMS/Email
+  if (user.phone) await sendSMS(user.phone, message);
+  if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
 }

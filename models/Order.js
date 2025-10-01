@@ -9,8 +9,8 @@ const OrderItemSchema = new mongoose.Schema(
     itemNotes: String,
     addOns: [{ key: String, name: String, price: Number }],
     price: Number,
-    express: { type: Boolean, default: false },   // per-item express
-    sameDay: { type: Boolean, default: false }    // per-item same-day
+    express: { type: Boolean, default: false }, // per-item express
+    sameDay: { type: Boolean, default: false } // per-item same-day
   },
   { _id: false }
 )
@@ -24,6 +24,37 @@ export const Statuses = [
   'Delivered',
   'Cancelled'
 ]
+
+// 🔑 Payment schema aligned for one-off retail/subscription orders
+const PaymentPlanSchema = new mongoose.Schema(
+  {
+    method: {
+      type: String,
+      enum: ['CARD', 'BANK_TRANSFER', 'WALLET', 'SUBSCRIPTION'],
+      required: true
+    },
+    mode: {
+      type: String,
+      enum: ['FULL', 'INSTALLMENT'],
+      default: 'FULL'
+    },
+    transactionId: String, // For CARD / BANK_TRANSFER
+    amountPaid: { type: Number, default: 0 },
+    balance: { type: Number, default: 0 },
+    installments: [
+      {
+        dueDate: Date,
+        amount: Number,
+        status: {
+          type: String,
+          enum: ['PENDING', 'PAID', 'FAILED'],
+          default: 'PENDING'
+        }
+      }
+    ]
+  },
+  { _id: false }
+)
 
 const OrderSchema = new mongoose.Schema(
   {
@@ -43,6 +74,11 @@ const OrderSchema = new mongoose.Schema(
       discount: Number,
       grandTotal: Number
     },
+    deliveryPin: {
+      type: String,
+      required: true
+    },
+
     pickup: {
       date: Date,
       window: String,
@@ -89,7 +125,8 @@ const OrderSchema = new mongoose.Schema(
     subscriptionPlanCode: { type: String }, // e.g. "PREM_CHOICE_24"
     slaHours: { type: Number },
 
-    expectedReadyAt: { type: Date }
+    expectedReadyAt: { type: Date },
+    payment: PaymentPlanSchema
   },
   { timestamps: true }
 )

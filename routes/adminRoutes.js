@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createEmployee, adminUpdateOrderStatus, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive, deleteEmployee, listAllOrders } from "../controllers/adminController.js";
+import { createEmployee, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive, deleteEmployee, listAllOrders, cancelOrderAdmin } from "../controllers/adminController.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { requireAuth, requireAdmin, requireEmployeeOrAdmin } from "../middlewares/authMiddleware.js";
 import { adminLoginSchema, adminRegisterSchema, createCouponSchema, createEmployeeSchema, updateStatusSchema } from "../utils/validator.js";
@@ -7,6 +7,7 @@ import { getAllConfigs, getConfig, upsertConfig, deleteConfig } from '../control
 import { listServices, createService, updateService, deleteService } from "../controllers/serviceController.js";
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
 import { deletePricing, listPricings, upsertPricing } from "../controllers/servicePricingController.js";
+import { updateOrderStatus } from "../controllers/orderController.js";
 
 const router = Router();
 
@@ -15,7 +16,6 @@ router.post("/login", validateBody(adminLoginSchema), adminLogin);
 router.post("/employees", requireAuth, requireAdmin, validateBody(createEmployeeSchema), createEmployee);
 router.get("/get-employees", requireAuth, requireAdmin, listEmployees);
 router.delete("/employees/:id", requireAuth, requireAdmin, deleteEmployee)
-router.patch("/orders/:id/status",requireAuth, requireEmployeeOrAdmin, validateBody(updateStatusSchema), adminUpdateOrderStatus);
 
 // ✅ create coupon
 router.post("/create/coupons", requireAuth, requireAdmin, validateBody(createCouponSchema), createCoupon);
@@ -58,5 +58,7 @@ router.delete("/service-pricings/:id", requireAuth, requireAdmin, deletePricing)
 
 //orders
 router.get("/orders", requireAuth, requireEmployeeOrAdmin, listAllOrders)
+router.patch("/orders/:id/status", requireAuth, requireEmployeeOrAdmin, validateBody(updateStatusSchema), updateOrderStatus)
+router.patch("/orders/:id/cancel", requireAuth, requireEmployeeOrAdmin, cancelOrderAdmin)
 
 export default router;

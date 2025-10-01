@@ -244,34 +244,53 @@ export const verifyPhone = async (req, res) => {
 }
 
 /**
- * @desc Resend verification code
+ * @desc Resend verification code (via phone + email if available)
  */
-export const resendSMS = async (req, res) => {
+export const resendCode = async (req, res) => {
   try {
-    const { error, value } = resendCodeSchema.validate(req.body)
-    if (error) return res.status(400).json({ error: error.details[0].message })
+    const { error, value } = resendCodeSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
 
-    const normalizedPhone = normalizePhone(value.phone)
+    let user;
 
-    const user = await User.findOne({ phone: normalizedPhone })
-    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (value.phone) {
+      const normalizedPhone = normalizePhone(value.phone);
+      user = await User.findOne({ phone: normalizedPhone });
+    } else if (value.email) {
+      user = await User.findOne({ email: value.email.toLowerCase() });
+    }
 
-    if (user.isVerified)
-      return res.status(400).json({ error: 'Already verified' })
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.isVerified) return res.status(400).json({ error: 'Already verified' });
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
-    user.verificationCode = code
-    user.verificationCodeExpires = Date.now() + 10 * 60 * 1000
-    await user.save()
+    // Generate new code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    user.verificationCode = code;
+    user.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
+    await user.save();
 
-    await sendSMS(normalizedPhone, `Your new verification code is ${code}`)
-await sendEmail(user.email, 'Your Verification Code', `<p>Your new verification code is <strong>${code}</strong></p>`);
-    res.json({ message: 'Verification code resent' })
+    // Send via phone (if user has phone)
+    if (user.phone) {
+      const normalizedPhone = normalizePhone(user.phone);
+      await sendSMS(normalizedPhone, `Your new verification code is ${code}`);
+    }
+
+    // Send via email (if user has email)
+    if (user.email) {
+      await sendEmail(
+        user.email,
+        'Your Verification Code',
+        `<p>Your new verification code is <strong>${code}</strong></p>`
+      );
+    }
+
+    res.json({ message: 'Verification code resent to all available channels' });
   } catch (err) {
-    console.error('Resend code error:', err)
-    res.status(500).json({ error: 'Failed to resend code' })
+    console.error('Resend code error:', err);
+    res.status(500).json({ error: 'Failed to resend code' });
   }
-}
+};
+
 
 /**
  * @desc Reset password directly

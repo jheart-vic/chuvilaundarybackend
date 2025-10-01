@@ -3,8 +3,8 @@ import {
   register,
   login,
   verifyPhone,
-  resendSMS,
   resetPasswordDirect,
+  resendCode,
 } from "../controllers/authController.js";
 
 const router = Router();
@@ -19,7 +19,7 @@ router.post("/login", login);
 router.post("/verify-phone", verifyPhone);
 
 // ✅ Resend verification code (SMS)
-router.post("/resend-code", resendSMS);
+router.post("/resend-code", resendCode);
 
 // ✅ Reset password (direct reset by phone)
 router.post("/reset-password", resetPasswordDirect);
