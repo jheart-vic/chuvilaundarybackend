@@ -78,8 +78,8 @@ router.patch("/issues/:id",  requireAuth, requireEmployeeOrAdmin, updateIssue);
 router.get(".issues/total", requireAuth, requireEmployeeOrAdmin, getTotalIssues);
 
 //review/feedback routes
-router.get('/', requireAuth,requireEmployeeOrAdmin, listReviews);
-router.get('/summary', requireAuth,requireEmployeeOrAdmin, reviewSummary);
+router.get('/reviews', requireAuth,requireEmployeeOrAdmin, listReviews);
+router.get('/reviews/summary', requireAuth,requireEmployeeOrAdmin, reviewSummary);
 
 // Generic delete many route for any model
 router.delete("/:model", requireAdmin, async (req, res) => {
