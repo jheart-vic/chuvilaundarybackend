@@ -1,6 +1,8 @@
 import axios from 'axios'
 import nodemailer from 'nodemailer'
 import Notification from '../models/Notification.js';
+import dotenv from 'dotenv'
+dotenv.config()
 
 const TERMII_BASE_URL = 'https://api.ng.termii.com/api/sms/send';
 

@@ -17,6 +17,7 @@ const subscriptionPlanSchema = new mongoose.Schema(
     overageFee: { type: Number, required: true, default: 500 }, // cost per extra item
     included_trips: { type: Number, required: true, default: 2 }, // free trips per month
     price_ngn: { type: Number, required: true, default: 5000 }, // plan cost
+    rollover_limit_items: { type: Number, default: 5 },
 
     // SLA & express
     sla_hours: { type: Number, required: true, default: 48 }, // standard SLA per tier

@@ -4,6 +4,7 @@ import { requireAuth } from "../middlewares/authMiddleware.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { saveAddressSchema } from "../utils/validator.js";
 import { subscribe } from "../controllers/emailSubscriber.js";
+import { getPlan, listPlans } from "../controllers/subscriptionPlanController.js";
 
 const router = Router();
 
@@ -24,6 +25,11 @@ router.patch("/me/preferences", requireAuth, updatePreferences);
 router.get('/refer', requireAuth, getReferralInfo)
 
 // Email subscription
-router.post("/subscribe", subscribe);
+router.post("/subscribe", requireAuth, subscribe);
+
+// Public
+router.get("/plans", requireAuth, listPlans);
+router.get("/plans/:code", requireAuth, getPlan);
+
 
 export default router;

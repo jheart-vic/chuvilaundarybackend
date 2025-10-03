@@ -1,21 +1,23 @@
 // utils/orderTotals.js
-import { computeRetailDeliveryFee, getRetailItemPrice } from './retailPricing.js'
+import {
+  computeRetailDeliveryFee,
+  getRetailItemPrice
+} from './retailPricing.js'
 import {
   computeSubscriptionItemPrice,
   computeSubscriptionDeliveryFee
 } from './subscriptionPricing.js'
 import { validateAndApplyCoupon } from './coupon.js'
-// import { getConfigValue } from './config.js'
-// import { resolveZone, getDeliveryFeeForZone } from './addressChecker.js'
 
+// normalize sameDay/express flags
 function normalizeFlags (item, order) {
   const sameDay = item.sameDay || order.sameDay || false
   const express = !sameDay && (item.express || order.express || false)
   return { express, sameDay }
 }
+
 /**
- * Compute order totals based on pricing model (retail or subscription)
- * Mutates items[] to include `.price`
+ * Compute order totals (subscription or retail)
  */
 export async function computeOrderTotals (
   order,
@@ -25,10 +27,9 @@ export async function computeOrderTotals (
   let addOnsTotal = 0
   let deliveryFee = 0
 
-  // Auto-upgrade to SUBSCRIPTION if user has an active plan
   const pricingModel = plan ? 'SUBSCRIPTION' : order.pricingModel || 'RETAIL'
 
-  // Safety check (in case validation missed it)
+  // Safety check
   const sameDayCount = order.items
     .filter(i => i.sameDay || order.sameDay)
     .reduce((sum, i) => sum + (i.quantity || 0), 0)
@@ -38,23 +39,16 @@ export async function computeOrderTotals (
   }
 
   if (pricingModel === 'SUBSCRIPTION') {
-    if (!plan)
-      throw new Error(
-        'Subscription plan object must be provided for SUBSCRIPTION orders'
-      )
+    if (!plan) throw new Error('Subscription plan object must be provided')
 
     for (const item of order.items) {
-      // --- Normalize flags ---
       const { express, sameDay } = normalizeFlags(item, order)
-
       const result = await computeSubscriptionItemPrice(
         plan,
         item.quantity,
         { express, sameDay },
         usage
       )
-
-      // Spread totalFee over quantity for per-item price
       item.price = result.totalFee / (item.quantity || 1)
       itemsTotal += result.totalFee
 
@@ -70,7 +64,7 @@ export async function computeOrderTotals (
       usage
     )
   } else {
-    // --- RETAIL pricing ---
+    // --- RETAIL branch ---
     for (const item of order.items) {
       const express = item.express || order.express || false
       const sameDay = item.sameDay || order.sameDay || false
@@ -90,14 +84,12 @@ export async function computeOrderTotals (
     }
 
     const distanceKm = order.delivery?.distanceKm || 0
-    deliveryFee = await computeRetailDeliveryFee(distanceKm, {
-      pricing: firstPricing
-    })
+    deliveryFee = await computeRetailDeliveryFee(distanceKm)
   }
 
   const subtotal = itemsTotal + addOnsTotal + deliveryFee
 
-  // --- Apply coupon if present ---
+  // --- Coupon ---
   let discount = 0
   if (order.couponCode) {
     try {

@@ -9,6 +9,7 @@ import User from '../models/User.js'
 // import Subscription from "../models/Subscription.js";
 import SubscriptionPlan from '../models/SubscriptionPlan.js'
 import SubUsage from '../models/SubUsage.js'
+import { initMonnifyPayment } from '../services/paymentService.js'
 import { DateTime } from 'luxon'
 
 const generateDeliveryPin = () =>
@@ -17,207 +18,18 @@ const generateDeliveryPin = () =>
 /**
  * Create order (supports retail and subscription)
  */
-// export const createOrder = async (req, res, next) => {
-//   console.log("Raw req.body:", req.body);
-
-//   try {
-//     const payload = req.body;
-//     const userPhone = req.user?.phone || payload.userPhone;
-
-//     // ✅ Basic validation
-//     if (!userPhone)
-//       return res.status(400).json({ message: "userPhone required" });
-//     if (!payload.items?.length)
-//       return res.status(400).json({ message: "At least one item is required" });
-//     if (!payload.pickup?.address)
-//       return res.status(400).json({ message: "Pickup address is required" });
-//     if (!payload.delivery?.address)
-//       return res.status(400).json({ message: "Delivery address is required" });
-
-//     // 1️⃣ Upload photos
-//     const photos = [];
-//     if (req.files?.length) {
-//       for (const f of req.files) {
-//         const result = await uploadToCloudinary(f.buffer, "laundry/photos");
-//         photos.push(result.secure_url);
-//       }
-//     }
-
-//     // 2️⃣ Normalize coupon code
-//     const couponCode = payload.couponCode?.trim().toUpperCase() || null;
-
-//     // 3️⃣ Check user subscription
-//     let plan = null;
-//     let usage = null;
-//     const user = await User.findOne({ phone: userPhone }).populate(
-//       "currentSubscription"
-//     );
-//     const subscription = user?.currentSubscription;
-
-//     if (subscription?.status === "ACTIVE") {
-//       plan = await SubscriptionPlan.findOne({
-//         code: subscription.plan_code,
-//         active: true,
-//       });
-//       if (plan) {
-//         const periodLabel = DateTime.now().toFormat("yyyy-LL");
-//         usage = await SubUsage.findOneAndUpdate(
-//           { subscription: subscription._id, period_label: periodLabel },
-//           {},
-//           { new: true, upsert: true }
-//         );
-//       } else {
-//         console.warn(
-//           "Active subscription exists but plan not found or inactive"
-//         );
-//       }
-//     }
-
-//     // 4️⃣ Determine pricing model
-//     let pricingModel;
-//     if (payload.pricingModel === "SUBSCRIPTION") {
-//       if (!plan)
-//         return res
-//           .status(400)
-//           .json({ message: "Active subscription plan not found" });
-//       pricingModel = "SUBSCRIPTION";
-//     } else if (plan) {
-//       // Auto-detect subscription if user has active plan
-//       pricingModel = "SUBSCRIPTION";
-//     } else {
-//       pricingModel = "RETAIL";
-//     }
-
-//     // 5️⃣ Resolve service tier
-//     let serviceTier;
-//     let tierOverrideMessage = null;
-
-//     if (pricingModel === "SUBSCRIPTION") {
-//       if (
-//         payload.serviceTier &&
-//         payload.serviceTier.toUpperCase() !== plan?.tier
-//       ) {
-//         console.warn(
-//           `User tried to set serviceTier "${payload.serviceTier}" for subscription order, but plan tier "${plan?.tier}" is used instead.`
-//         );
-//         tierOverrideMessage = `serviceTier overridden to ${plan?.tier}`;
-//       }
-//       serviceTier = plan?.tier || "STANDARD";
-//     } else {
-//       serviceTier = payload.serviceTier?.toUpperCase() || "STANDARD";
-//     }
-
-//     // 6️⃣ Compute totals (mutates items to add .price)
-//     const totals = await computeOrderTotals(
-//       {
-//         ...payload,
-//         couponCode,
-//         pricingModel,
-//         subscriptionPlanCode: plan?.code,
-//         userPhone,
-//         serviceTier,
-//       },
-//       { plan, usage }
-//     );
-
-//     // 7️⃣ SLA calculation
-//     const hasExpress = payload.items.some((i) => i.express);
-//     const hasSameDay = Boolean(payload.sameDay);
-
-//     // ✅ Enforce same-day item limit
-//     if (hasSameDay) {
-//       const totalItems = payload.items.reduce(
-//         (sum, i) => sum + (i.quantity || 1),
-//         0
-//       );
-//       if (totalItems > 15) {
-//         return res.status(400).json({
-//           message: "Same-day orders are limited to 15 items maximum.",
-//         });
-//       }
-//     }
-
-//     const expectedReadyAt = computeExpectedReadyAt(
-//       new Date(payload.pickup.date),
-//       serviceTier,
-//       { express: hasExpress, sameDay: hasSameDay }
-//     );
-
-//     const slaHours = Math.round(
-//       (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
-//     );
-
-//     // 8️⃣ Create order
-//     const order = await Order.create({
-//       userPhone,
-//       userName: payload.userName,
-//       items: payload.items,
-//       notes: payload.notes,
-//       photos,
-//       couponCode,
-//       totals,
-//       pickup: payload.pickup,
-//       delivery: {
-//         date: payload.delivery.date,
-//         window: payload.delivery.window,
-//         address: payload.delivery.address,
-//       },
-//       status: "Booked",
-//       history: [{ status: "Booked", note: "Order created" }],
-//       subscriptionPlanCode: plan?.code || null,
-//       pricingModel,
-//       serviceTier,
-//       slaHours,
-//       expectedReadyAt,
-//       sameDay: hasSameDay,
-//     });
-
-//     // 9️⃣ Track coupon usage
-//     if (couponCode) {
-//       const coupon = await Coupon.findOne({ code: couponCode });
-//       if (coupon) {
-//         coupon.uses += 1;
-//         coupon.redemptions.push({
-//           userPhone,
-//           orderId: order._id,
-//           redeemedAt: DateTime.now().setZone("Africa/Lagos").toJSDate(),
-//         });
-//         await coupon.save();
-//       }
-//     }
-
-//     // 🔟 Notify user
-//     await notifyOrderEvent({ user: req.user, order, type: "created" });
-
-//     res.status(201).json({
-//       order,
-//       ...(tierOverrideMessage && { message: tierOverrideMessage }),
-//     });
-//   } catch (err) {
-//     console.error("Create order failed:", err);
-//     next(err);
-//   }
-// };
-
 export const createOrder = async (req, res, next) => {
-  console.log('Raw req.body:', req.body)
-
   try {
     const payload = req.body
     const userPhone = req.user?.phone || payload.userPhone
+    if (!userPhone) return res.status(400).json({ message: 'userPhone required' })
+    if (!payload.items?.length) return res.status(400).json({ message: 'At least one item required' })
+    if (!payload.pickup?.address) return res.status(400).json({ message: 'Pickup address required' })
+    if (!payload.delivery?.address) return res.status(400).json({ message: 'Delivery address required' })
 
     const deliveryPin = generateDeliveryPin()
-    // ✅ Basic validation
-    if (!userPhone)
-      return res.status(400).json({ message: 'userPhone required' })
-    if (!payload.items?.length)
-      return res.status(400).json({ message: 'At least one item is required' })
-    if (!payload.pickup?.address)
-      return res.status(400).json({ message: 'Pickup address is required' })
-    if (!payload.delivery?.address)
-      return res.status(400).json({ message: 'Delivery address is required' })
 
-    // 1️⃣ Upload photos
+    // --- Photos upload
     const photos = []
     if (req.files?.length) {
       for (const f of req.files) {
@@ -226,15 +38,13 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
-    // 2️⃣ Normalize coupon code
+    // --- Coupon normalization
     const couponCode = payload.couponCode?.trim().toUpperCase() || null
 
-    // 3️⃣ Check user subscription
+    // --- Subscription check
     let plan = null
     let usage = null
-    const user = await User.findOne({ phone: userPhone }).populate(
-      'currentSubscription'
-    )
+    const user = await User.findOne({ phone: userPhone }).populate('currentSubscription')
     const subscription = user?.currentSubscription
 
     if (subscription?.status === 'ACTIVE') {
@@ -252,28 +62,22 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
-    // 4️⃣ Determine pricing model
+    // --- Pricing model selection
     let pricingModel
     if (payload.pricingModel === 'SUBSCRIPTION') {
-      if (!plan)
-        return res
-          .status(400)
-          .json({ message: 'Active subscription plan not found' })
+      if (!plan) return res.status(400).json({ message: 'Active subscription not found' })
       pricingModel = 'SUBSCRIPTION'
     } else if (plan) {
-      pricingModel = 'SUBSCRIPTION' // auto detect
+      pricingModel = 'SUBSCRIPTION'
     } else {
       pricingModel = 'RETAIL'
     }
 
-    // 5️⃣ Resolve service tier
+    // --- Service tier
     let serviceTier
     let tierOverrideMessage = null
     if (pricingModel === 'SUBSCRIPTION') {
-      if (
-        payload.serviceTier &&
-        payload.serviceTier.toUpperCase() !== plan?.tier
-      ) {
+      if (payload.serviceTier && payload.serviceTier.toUpperCase() !== plan?.tier) {
         tierOverrideMessage = `serviceTier overridden to ${plan?.tier}`
       }
       serviceTier = plan?.tier || 'STANDARD'
@@ -281,7 +85,7 @@ export const createOrder = async (req, res, next) => {
       serviceTier = payload.serviceTier?.toUpperCase() || 'STANDARD'
     }
 
-    // 6️⃣ Compute totals
+    // --- Totals (includes subscription overages if any)
     const totals = await computeOrderTotals(
       {
         ...payload,
@@ -294,18 +98,13 @@ export const createOrder = async (req, res, next) => {
       { plan, usage }
     )
 
-    // 7️⃣ SLA calculation
+    // --- SLA / Ready time
     const hasExpress = payload.items.some(i => i.express)
     const hasSameDay = Boolean(payload.sameDay)
     if (hasSameDay) {
-      const totalItems = payload.items.reduce(
-        (sum, i) => sum + (i.quantity || 1),
-        0
-      )
+      const totalItems = payload.items.reduce((s, i) => s + (i.quantity || 1), 0)
       if (totalItems > 15) {
-        return res.status(400).json({
-          message: 'Same-day orders are limited to 15 items maximum.'
-        })
+        return res.status(400).json({ message: 'Same-day orders limited to 15 items max' })
       }
     }
     const expectedReadyAt = computeExpectedReadyAt(
@@ -317,10 +116,9 @@ export const createOrder = async (req, res, next) => {
       (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
     )
 
-    // 8️⃣ Prepare payment info
+    // --- Payment info
     const paymentInput = payload.payment || {}
-    if (!paymentInput.method)
-      return res.status(400).json({ message: 'Payment method required' })
+    if (!paymentInput.method) return res.status(400).json({ message: 'Payment method required' })
 
     let paymentData = {
       method: paymentInput.method,
@@ -330,40 +128,37 @@ export const createOrder = async (req, res, next) => {
       installments: []
     }
 
-    // Init Monnify for CARD / BANK_TRANSFER
     let paymentInitResponse = null
-    if (['CARD', 'BANK_TRANSFER'].includes(paymentInput.method)) {
+    if (
+      ['CARD', 'BANK_TRANSFER'].includes(paymentInput.method) &&
+      (pricingModel === 'RETAIL' || (pricingModel === 'SUBSCRIPTION' && totals.grandTotal > 0))
+    ) {
+      // 🔥 For retail OR subscription overage payments
       paymentInitResponse = await initMonnifyPayment({
         amount: totals.grandTotal,
         customerName: payload.userName || 'Customer',
         customerEmail: user?.email || 'noemail@example.com',
         customerPhone: userPhone,
         orderId: `ORD-${Date.now()}`,
-        paymentMethod:
-          paymentInput.method === 'CARD' ? 'CARD' : 'ACCOUNT_TRANSFER'
+        paymentMethod: paymentInput.method === 'CARD' ? 'CARD' : 'ACCOUNT_TRANSFER'
       })
       paymentData.transactionId = paymentInitResponse?.transactionReference
     }
 
-    // If installments mode, prefill schedule
+    // --- Installments validation
     if (paymentInput.mode === 'INSTALLMENT' && paymentInput.installments) {
       paymentData.installments = paymentInput.installments.map(i => ({
         dueDate: i.dueDate,
         amount: i.amount,
         status: 'PENDING'
       }))
-      const totalInstallments = paymentData.installments.reduce(
-        (s, i) => s + i.amount,
-        0
-      )
+      const totalInstallments = paymentData.installments.reduce((s, i) => s + i.amount, 0)
       if (totalInstallments !== totals.grandTotal) {
-        return res.status(400).json({
-          message: 'Installment amounts must equal grand total'
-        })
+        return res.status(400).json({ message: 'Installment amounts must equal grand total' })
       }
     }
 
-    // 9️⃣ Create order
+    // --- Create order
     const order = await Order.create({
       userPhone,
       userName: payload.userName,
@@ -381,12 +176,13 @@ export const createOrder = async (req, res, next) => {
       serviceTier,
       slaHours,
       expectedReadyAt,
+      express: hasExpress,
       sameDay: hasSameDay,
       payment: paymentData,
       deliveryPin
     })
 
-    // 🔟 Track coupon usage
+    // --- Coupon usage increment
     if (couponCode) {
       const coupon = await Coupon.findOne({ code: couponCode })
       if (coupon) {
@@ -400,16 +196,14 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
-    // 1️⃣1️⃣ Notify user
+    // --- Notifications
     await notifyOrderEvent({
       user: req.user,
       order,
       type: 'orderCreated',
       meta: { deliveryPin }
     })
-    // Notify admin(s) only
     const admins = await User.find({ role: 'admin' })
-
     for (const admin of admins) {
       await notifyOrderEvent({
         user: admin,
@@ -421,7 +215,7 @@ export const createOrder = async (req, res, next) => {
 
     res.status(201).json({
       order,
-      paymentInitResponse, // URL / account details for payment
+      paymentInitResponse, // Monnify link/account if needed
       ...(tierOverrideMessage && { message: tierOverrideMessage })
     })
   } catch (err) {

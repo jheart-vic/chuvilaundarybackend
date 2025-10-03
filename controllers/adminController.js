@@ -72,10 +72,19 @@ export const adminLogin = async (req, res) => {
 
 export const createEmployee = async (req, res, next) => {
   try {
-    const { phone, fullName } = req.body;
-    if (!phone || !fullName)
-      return res.status(400).json({ message: "phone & name required" });
+    const { phone, fullName, workRole } = req.body;
 
+    // Validate required fields
+    if (!phone || !fullName) {
+      return res.status(400).json({ message: "Phone & full name are required" });
+    }
+
+    // Optional: ensure workRole is provided
+    if (!workRole) {
+      return res.status(400).json({ message: "Work role is required" });
+    }
+
+    // Check for existing user
     const existingUser = await User.findOne({ phone });
     if (existingUser) {
       return res
@@ -94,12 +103,12 @@ export const createEmployee = async (req, res, next) => {
       phone,
       fullName,
       role: "employee",
+      workRole,
       password: hashedPassword,
       referralCode,
       isVerified: true,
     });
 
-    // Return user and generated password
     res.status(201).json({
       message: "Employee created successfully",
       user,
@@ -111,7 +120,6 @@ export const createEmployee = async (req, res, next) => {
 };
 
 //list all orders (admin only)
-// controller
 export const listAllOrders = async (req, res, next) => {
   try {
     const { status, phone, page = 1, limit = 20 } = req.query;

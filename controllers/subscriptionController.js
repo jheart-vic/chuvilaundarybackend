@@ -5,49 +5,94 @@ import SubUsage from '../models/SubUsage.js'
 import { DateTime } from 'luxon'
 
 /**
- * Subscribe user to a plan
+ * User requests subscription (creates PENDING subscription + returns payment link)
  */
 export const subscribe = async (req, res, next) => {
   try {
-    const userId = req.user._id;
-    const { planCode } = req.body;
+    const userId = req.user._id
+    const { planCode } = req.body
 
-    const plan = await SubscriptionPlan.findOne({ code: planCode });
-    if (!plan) return res.status(404).json({ message: 'Plan not found' });
+    const plan = await SubscriptionPlan.findOne({ code: planCode })
+    if (!plan) return res.status(404).json({ message: 'Plan not found' })
 
-    // Check if the user already has this plan active
+    // Check if user already has this plan active
     const existing = await Subscription.findOne({
       customer: userId,
       plan_code: planCode,
       status: 'ACTIVE'
-    });
-
+    })
     if (existing) {
       return res.status(400).json({
         message: 'You already have this plan active'
-      });
+      })
     }
 
-    // Cancel any other active subscriptions (different plans)
+    // Cancel any other active subs (different plans)
     await Subscription.updateMany(
       { customer: userId, status: 'ACTIVE' },
       { $set: { status: 'CANCELLED', ended_at: DateTime.now().toJSDate() } }
-    );
+    )
 
-    const startDate = DateTime.now().setZone("Africa/Lagos");
-    const renewalDate = startDate.plus({ months: 1 });
-    // Create new subscription
+    // Create subscription in PENDING state until payment succeeds
     const subscription = await Subscription.create({
       customer: userId,
       plan_code: plan.code,
-      status: 'ACTIVE',
-      started_at: startDate.toJSDate(),
-      renewal_date: renewalDate.toJSDate()
-    });
+      status: 'PENDING',
+      created_at: DateTime.now().setZone("Africa/Lagos").toJSDate()
+    })
 
+    // Generate payment link (stub — integrate with Monnify/Paystack/Flutterwave)
+    const paymentLink = `https://payment-gateway.com/pay?amount=${plan.price}&ref=${subscription._id}`
 
-    // Create initial usage record for current period
-    const currentPeriod = startDate.toFormat("yyyy-LL"); // e.g. "2025-09"
+    res.status(201).json({
+      message: 'Subscription created. Awaiting payment.',
+      subscription,
+      paymentLink
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+/**
+ * Webhook/callback after successful payment
+ */
+// controllers/subscriptionController.js
+export const confirmSubscriptionPayment = async (req, res, next) => {
+  try {
+    const { eventType, eventData } = req.body;
+
+    if (eventType !== "SUCCESSFUL_TRANSACTION") {
+      return res.status(400).json({ message: "Not a successful transaction event" });
+    }
+
+    const subscriptionId = eventData.product?.reference; // You must set this when creating Monnify payment
+    const subscription = await Subscription.findById(subscriptionId);
+
+    if (!subscription) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
+
+    if (eventData.paymentStatus !== "PAID") {
+      subscription.status = "FAILED";
+      await subscription.save();
+      return res.status(400).json({ message: "Payment not completed" });
+    }
+
+    // Activate subscription
+    const startDate = DateTime.now().setZone("Africa/Lagos");
+    const renewalDate = startDate.plus({ months: 1 });
+
+    subscription.status = "ACTIVE";
+    subscription.started_at = startDate.toJSDate();
+    subscription.renewal_date = renewalDate.toJSDate();
+    subscription.amount_paid = eventData.amountPaid;
+    subscription.payment_reference = eventData.paymentReference;
+    subscription.transaction_reference = eventData.transactionReference;
+    await subscription.save();
+
+    // Create initial usage record
+    const currentPeriod = startDate.toFormat("yyyy-LL");
     await SubUsage.create({
       subscription: subscription._id,
       period_label: currentPeriod,
@@ -59,7 +104,10 @@ export const subscribe = async (req, res, next) => {
       on_time_pct: 100
     });
 
-    res.status(201).json({ message: 'Subscribed successfully', subscription });
+    res.json({
+      message: "Payment confirmed. Subscription activated.",
+      subscription
+    });
   } catch (err) {
     next(err);
   }
