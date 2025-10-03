@@ -9,8 +9,8 @@ import User from '../models/User.js'
 // import Subscription from "../models/Subscription.js";
 import SubscriptionPlan from '../models/SubscriptionPlan.js'
 import SubUsage from '../models/SubUsage.js'
-import { initMonnifyPayment } from '../services/paymentService.js'
 import { DateTime } from 'luxon'
+import { initMonnifyPayment } from '../utils/monnify.js'
 
 const generateDeliveryPin = () =>
   Math.floor(1000 + Math.random() * 9000).toString()
