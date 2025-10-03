@@ -79,7 +79,6 @@ export const createEmployee = async (req, res, next) => {
       return res.status(400).json({ message: "Phone & full name are required" });
     }
 
-    // Optional: ensure workRole is provided
     if (!workRole) {
       return res.status(400).json({ message: "Work role is required" });
     }
@@ -92,14 +91,25 @@ export const createEmployee = async (req, res, next) => {
         .json({ message: "User with this phone already exists" });
     }
 
-    // Generate a unique default password
+    // Generate referral code
     const referralCode = generateReferralCode();
-    const randomNumber = getRandomNumber();
-    const defaultPassword = `Employee${fullName.replace(/\s+/g, '')}${randomNumber}`;
+
+    // ✅ Generate random 4-letter word
+    const randomWord = Array.from({ length: 4 }, () =>
+      String.fromCharCode(97 + Math.floor(Math.random() * 26)) // a-z
+    ).join("");
+
+    // ✅ Generate random number (e.g., 1000–9999)
+    const randomNumber = Math.floor(1000 + Math.random() * 9000);
+
+    // ✅ Build password: Chuvi + 4-letter word + number
+    const defaultPassword = `Chuvi${randomWord}${randomNumber}`;
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
     // Create new employee
-    const user = await User.create({
+    const newUser = await User.create({
       phone,
       fullName,
       role: "employee",
@@ -109,7 +119,9 @@ export const createEmployee = async (req, res, next) => {
       isVerified: true,
     });
 
-    res.status(201).json({
+    const user = await User.findById(newUser._id).lean();
+
+    return res.status(201).json({
       message: "Employee created successfully",
       user,
       defaultPassword,
@@ -118,6 +130,7 @@ export const createEmployee = async (req, res, next) => {
     next(err);
   }
 };
+
 
 //list all orders (admin only)
 export const listAllOrders = async (req, res, next) => {
