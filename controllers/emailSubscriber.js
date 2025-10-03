@@ -1,8 +1,10 @@
 // controllers/subscriberController.js
 import Subscriber from "../models/Subscriber.js";
 import { sendEmail } from "../services/notificationService.js";
+import dotenv from "dotenv";
+dotenv.config();
 
-
+// Subscribe to email list
 export async function emailSubscribe(req, res, next) {
   try {
     const { email } = req.body;

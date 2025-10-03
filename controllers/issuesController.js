@@ -1,6 +1,11 @@
 import Issue from '../models/Issue.js';
 import Notification from '../models/Notification.js';
 import { notifyIssueEvent, sendEmail } from '../services/notificationService.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// create, update, get total issues, list issues
 
 export async function createIssue(req, res, next) {
   try {
@@ -33,7 +38,6 @@ export async function createIssue(req, res, next) {
     next(err)
   }
 }
-
 
 export async function updateIssue(req, res, next) {
   try {
@@ -71,7 +75,6 @@ export async function updateIssue(req, res, next) {
   }
 }
 
-// Total issues count
 export async function getTotalIssues(req, res, next) {
   try {
     const totalIssues = await Issue.countDocuments();
@@ -87,7 +90,6 @@ export async function getTotalIssues(req, res, next) {
     next(err);
   }
 }
-
 
 export async function listIssues(req, res, next) {
 try {
