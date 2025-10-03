@@ -9,9 +9,9 @@ dotenv.config();
 
 export async function createIssue(req, res, next) {
   try {
-    const { name, phone, order, message } = req.validated || req.body
+    const { fullName, phone, order, message } = req.validated || req.body
 
-    const issue = await Issue.create({ name, phone, order, message })
+    const issue = await Issue.create({ fullName, phone, order, message })
 
     await Notification.create({
       user: req.user?._id,
@@ -25,7 +25,7 @@ export async function createIssue(req, res, next) {
     await sendEmail(
       supportEmail,
       'New Issue Reported',
-      `<p>User <strong>${name}</strong> (${phone}) reported an issue:</p>
+      `<p>User <strong>${fullName}</strong> (${phone}) reported an issue:</p>
        <p><em>${message}</em></p>
        ${order ? `<p>Order ID: ${order}</p>` : ''}`
     )

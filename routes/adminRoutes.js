@@ -9,6 +9,8 @@ import SubscriptionPlan from "../models/SubscriptionPlan.js";
 import { deletePricing, listPricings, upsertPricing } from "../controllers/servicePricingController.js";
 import { updateOrderStatus } from "../controllers/orderController.js";
 import { createPlan, deactivatePlan, updatePlan } from "../controllers/subscriptionPlanController.js";
+import { getTotalIssues, listIssues, updateIssue } from "../controllers/issuesController.js";
+import { listReviews, reviewSummary } from "../controllers/reviewsController.js";
 
 const router = Router();
 const allowedModels = ["Order", "ServicePricing", "Service", "User", "Notification", "Coupon", "SubscriptionPlan"];
@@ -69,6 +71,15 @@ router.patch("/orders/:id/cancel", requireAuth, requireEmployeeOrAdmin, cancelOr
 router.post("/plans", requireAuth, requireAdmin, createPlan);
 router.put("/plans/:code", requireAuth, requireAdmin, updatePlan);
 router.delete("/plans/:code", requireAuth, requireAdmin, deactivatePlan);
+
+//issues routes
+router.get("/issues",  requireAuth, requireEmployeeOrAdmin, listIssues);
+router.patch("/issues/:id",  requireAuth, requireEmployeeOrAdmin, updateIssue);
+router.get(".issues/total", requireAuth, requireEmployeeOrAdmin, getTotalIssues);
+
+//review/feedback routes
+router.get('/', requireAuth,requireEmployeeOrAdmin, listReviews);
+router.get('/summary', requireAuth,requireEmployeeOrAdmin, reviewSummary);
 
 // Generic delete many route for any model
 router.delete("/:model", requireAdmin, async (req, res) => {

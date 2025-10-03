@@ -304,7 +304,7 @@ export const createCouponSchema = Joi.object({
   });
 
 export const createIssueSchema = Joi.object({
-  name: Joi.string().min(2).max(100).required(),
+  fulName: Joi.string().min(2).max(100).required(),
   phone: Joi.string()
     .pattern(/^\+?[0-9]{10,15}$/) // E.164 format
     .required(),
