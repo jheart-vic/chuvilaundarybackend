@@ -227,7 +227,8 @@ export const updateStatusSchema = Joi.object({
 
 export const createEmployeeSchema = Joi.object({
   phone: Joi.string().pattern(/^\+?\d{7,15}$/).required(),
-  fullName: Joi.string().min(2).required()
+  fullName: Joi.string().min(2).required(),
+  workRole: Joi.string().min(2).required()
 });
 
 export const createServiceSchema = Joi.object({
