@@ -1,5 +1,8 @@
 // utils/monnify.js
 import axios from 'axios'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const MONNIFY_BASE_URL = 'https://sandbox.monnify.com/api'
 const API_KEY = process.env.MONNIFY_API_KEY

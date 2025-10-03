@@ -1,24 +1,21 @@
 import Issue from '../models/Issue.js';
 import Notification from '../models/Notification.js';
-import { sendEmail } from '../services/notificationService.js';
-
+import { notifyIssueEvent, sendEmail } from '../services/notificationService.js';
 
 export async function createIssue(req, res, next) {
   try {
     const { name, phone, order, message } = req.validated || req.body
 
-    // 1️⃣ Save issue
     const issue = await Issue.create({ name, phone, order, message })
 
-    // 2️⃣ Save notification (system type by default)
     await Notification.create({
-      user: req.user?._id, // only if logged-in user is known
+      user: req.user?._id,
       title: 'New Issue Created',
       message: `Issue reported: ${message}`,
       type: 'system'
     })
 
-    // 3️⃣ Send email to support/admin
+    // ✅ Notify support (for internal tracking)
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@yourapp.com'
     await sendEmail(
       supportEmail,
@@ -27,6 +24,9 @@ export async function createIssue(req, res, next) {
        <p><em>${message}</em></p>
        ${order ? `<p>Order ID: ${order}</p>` : ''}`
     )
+
+    // ✅ Notify user (using templates)
+    await notifyIssueEvent({ user: req.user, issue, type: "issue_created" });
 
     return res.status(201).json({ success: true, issue })
   } catch (err) {
@@ -55,7 +55,6 @@ export async function updateIssue(req, res, next) {
       return res.status(404).json({ success: false, error: 'Issue not found' })
     }
 
-    // 1️⃣ Save notification
     await Notification.create({
       user: req.user?._id,
       title: 'Issue Updated',
@@ -63,19 +62,29 @@ export async function updateIssue(req, res, next) {
       type: 'system'
     })
 
-    // 2️⃣ Send email (to user or support)
-    const to = process.env.SUPPORT_EMAIL || 'support@yourapp.com'
-    await sendEmail(
-      to,
-      'Issue Updated',
-      `<p>Issue #${issue._id} has been updated.</p>
-       <p>Status: ${issue.status}</p>
-       <p>Message: ${issue.message}</p>`
-    )
+    // ✅ Notify user using template
+    await notifyIssueEvent({ user: req.user, issue, type: "issue_updated" });
 
     return res.json({ success: true, issue })
   } catch (err) {
     next(err)
+  }
+}
+
+// Total issues count
+export async function getTotalIssues(req, res, next) {
+  try {
+    const totalIssues = await Issue.countDocuments();
+    const openIssues = await Issue.countDocuments({ status: 'open' });
+    const resolvedIssues = await Issue.countDocuments({ status: 'resolved' });
+
+    res.json({
+      total: totalIssues,
+      open: openIssues,
+      resolved: resolvedIssues
+    });
+  } catch (err) {
+    next(err);
   }
 }
 

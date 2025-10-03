@@ -57,7 +57,6 @@ export const subscribe = async (req, res, next) => {
 /**
  * Webhook/callback after successful payment
  */
-// controllers/subscriptionController.js
 export const confirmSubscriptionPayment = async (req, res, next) => {
   try {
     const { eventType, eventData } = req.body;

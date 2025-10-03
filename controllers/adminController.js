@@ -1,49 +1,52 @@
-import User from "../models/User.js";
-import Order from "../models/Order.js";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
-import Coupon from "../models/Coupon.js";
-import dotenv from "dotenv";
-dotenv.config();
-const getRandomNumber = () => Math.floor(10 + Math.random() * 90); // 10-99
-const generateReferralCode = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-};
+import User from '../models/User.js'
+import Order from '../models/Order.js'
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
+import Coupon from '../models/Coupon.js'
+import dotenv from 'dotenv'
+dotenv.config()
 
+const generateReferralCode = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase()
+}
 
 export const adminRegister = async (req, res) => {
-  const {  fullName, phone, email, password, masterPassword } = req.body;
+  const { fullName, phone, email, password, masterPassword } = req.body
 
   if (masterPassword !== process.env.ADMIN_MASTER_PASSWORD)
-    return res.status(401).json({ message: "Invalid master password" });
+    return res.status(401).json({ message: 'Invalid master password' })
 
-  let user = await User.findOne({ phone });
-  if (user) return res.status(400).json({ message: "User already exists" });
+  let user = await User.findOne({ phone })
+  if (user) return res.status(400).json({ message: 'User already exists' })
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const referralCode = generateReferralCode();
+  const hashedPassword = await bcrypt.hash(password, 10)
+  const referralCode = generateReferralCode()
 
   user = await User.create({
     phone,
     fullName,
     email,
     password: hashedPassword,
-    role: "admin",
+    role: 'admin',
     referralCode,
     isVerified: true
-  });
+  })
 
-  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
+  const token = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: '7d'
+    }
+  )
 
-  res.status(201).json({ user, token });
-};
+  res.status(201).json({ user, token })
+}
 
 export const adminLogin = async (req, res) => {
-  const { phone, password, masterPassword } = req.body;
+  const { phone, password, masterPassword } = req.body
 
-  let user = await User.findOne({ phone });
+  let user = await User.findOne({ phone })
 
   // Login with master password
   if (masterPassword && masterPassword === process.env.ADMIN_MASTER_PASSWORD) {
@@ -51,155 +54,206 @@ export const adminLogin = async (req, res) => {
       // Create admin user on the fly
       user = await User.create({
         phone,
-        fullName: "Admin User",
-        role: "admin",
+        fullName: 'Admin User',
+        role: 'admin',
         isVerified: true,
-        password: await bcrypt.hash("defaultPassword123", 10) // or random
-      });
+        password: await bcrypt.hash('defaultPassword123', 10) // or random
+      })
     }
   } else {
     // Normal login
     if (!user || !(await bcrypt.compare(password, user.password)))
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: 'Invalid credentials' })
   }
 
-  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
+  const token = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: '7d'
+    }
+  )
 
-  res.json({ user, token });
-};
+  res.json({ user, token })
+}
 
 export const createEmployee = async (req, res, next) => {
   try {
-    const { phone, fullName, workRole } = req.body;
+    const { phone, fullName, workRole } = req.body
 
     // Validate required fields
     if (!phone || !fullName) {
-      return res.status(400).json({ message: "Phone & full name are required" });
+      return res.status(400).json({ message: 'Phone & full name are required' })
     }
 
     if (!workRole) {
-      return res.status(400).json({ message: "Work role is required" });
+      return res.status(400).json({ message: 'Work role is required' })
     }
 
     // Check for existing user
-    const existingUser = await User.findOne({ phone });
+    const existingUser = await User.findOne({ phone })
     if (existingUser) {
       return res
         .status(400)
-        .json({ message: "User with this phone already exists" });
+        .json({ message: 'User with this phone already exists' })
     }
 
     // Generate referral code
-    const referralCode = generateReferralCode();
+    const referralCode = generateReferralCode()
 
     // ✅ Generate random 4-letter word
-    const randomWord = Array.from({ length: 4 }, () =>
-      String.fromCharCode(97 + Math.floor(Math.random() * 26)) // a-z
-    ).join("");
+    const randomWord = Array.from(
+      { length: 4 },
+      () => String.fromCharCode(97 + Math.floor(Math.random() * 26)) // a-z
+    ).join('')
 
     // ✅ Generate random number (e.g., 1000–9999)
-    const randomNumber = Math.floor(1000 + Math.random() * 9000);
+    const randomNumber = Math.floor(1000 + Math.random() * 9000)
 
     // ✅ Build password: Chuvi + 4-letter word + number
-    const defaultPassword = `Chuvi${randomWord}${randomNumber}`;
+    const defaultPassword = `Chuvi${randomWord}${randomNumber}`
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10)
 
     // Create new employee
     const newUser = await User.create({
       phone,
       fullName,
-      role: "employee",
+      role: 'employee',
       workRole,
       password: hashedPassword,
       referralCode,
-      isVerified: true,
-    });
+      isVerified: true
+    })
 
-    const user = await User.findById(newUser._id).lean();
+    const user = await User.findById(newUser._id).lean()
 
     return res.status(201).json({
-      message: "Employee created successfully",
+      message: 'Employee created successfully',
       user,
-      defaultPassword,
-    });
+      defaultPassword
+    })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
+// Total employees
+export const getTotalEmployees = async (req, res, next) => {
+  try {
+    const totalEmployees = await User.countDocuments({ role: 'employee' })
+    const activeEmployees = await User.countDocuments({
+      role: 'employee',
+      isVerified: true
+    })
+
+    res.json({
+      total: totalEmployees,
+      active: activeEmployees
+    })
+  } catch (err) {
+    next(err)
+  }
+}
 
 //list all orders (admin only)
 export const listAllOrders = async (req, res, next) => {
   try {
-    const { status, phone, page = 1, limit = 20 } = req.query;
+    const { status, phone, page = 1, limit = 20 } = req.query
 
-    const filter = {};
-    if (status) filter.status = status;
-    if (phone) filter.userPhone = phone;
+    const filter = {}
+    if (status) filter.status = status
+    if (phone) filter.userPhone = phone
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit)
 
     const [orders, total] = await Promise.all([
       Order.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
-      Order.countDocuments(filter),
-    ]);
+      Order.countDocuments(filter)
+    ])
 
-    const ordersData = orders.map((o) => o.toObject());
+    const ordersData = orders.map(o => o.toObject())
 
     res.json({
       total,
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / limit),
-      orders: ordersData,
+      orders: ordersData
+    })
+  } catch (err) {
+    console.error('Error in listAllOrders:', err)
+    next(err)
+  }
+}
+
+// Total orders + pending orders
+export async function getTotalOrders(req, res, next) {
+  try {
+    const totalOrders = await Order.countDocuments();
+    const pendingOrders = await Order.countDocuments({ status: 'Booked' });
+    const inProgress = await Order.countDocuments({ status: 'In Progress' });
+
+    res.json({
+      total: totalOrders,
+      pending: pendingOrders,
+      inProgress
     });
   } catch (err) {
-    console.error("Error in listAllOrders:", err);
     next(err);
   }
-};
-
+}
 
 // list all employees (admin only)
 export const listEmployees = async (req, res, next) => {
   try {
-    const employees = await User.find({ role: "employee" }).sort({ createdAt: -1 });
-    res.json(employees);
+    const employees = await User.find({ role: 'employee' }).sort({
+      createdAt: -1
+    })
+    res.json(employees)
   } catch (err) {
-    next(err);
+    next(err)
   }
-
-};
+}
 
 export const deleteEmployee = async (req, res, next) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ message: "User deleted successfully" });
+    const user = await User.findByIdAndDelete(req.params.id)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    res.json({ message: 'User deleted successfully' })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 /** admin create coupon */
 export const createCoupon = async (req, res, next) => {
   try {
-    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses, isActive } = req.body;
+    const {
+      code,
+      discountPercent,
+      discountAmount,
+      expiresAt,
+      minOrderValue,
+      maxUses,
+      isActive
+    } = req.body
 
-    if (!code) return res.status(400).json({ message: "Coupon code is required" });
+    if (!code)
+      return res.status(400).json({ message: 'Coupon code is required' })
     if (!discountPercent && !discountAmount)
-      return res.status(400).json({ message: "Provide either discountPercent or discountAmount" });
+      return res
+        .status(400)
+        .json({ message: 'Provide either discountPercent or discountAmount' })
 
     // Ensure unique code
-    const exists = await Coupon.findOne({ code: code.toUpperCase() });
-    if (exists) return res.status(400).json({ message: "Coupon code already exists" });
+    const exists = await Coupon.findOne({ code: code.toUpperCase() })
+    if (exists)
+      return res.status(400).json({ message: 'Coupon code already exists' })
 
     const coupon = await Coupon.create({
       code: code.toUpperCase(),
@@ -208,118 +262,125 @@ export const createCoupon = async (req, res, next) => {
       expiresAt,
       minOrderValue,
       maxUses,
-      isActive: isActive !== undefined ? isActive : true, // ✅ default true
-    });
+      isActive: isActive !== undefined ? isActive : true // ✅ default true
+    })
 
-    res.status(201).json({ message: "Coupon created successfully", coupon });
+    res.status(201).json({ message: 'Coupon created successfully', coupon })
   } catch (err) {
-    console.error(err);
-    next(err);
+    console.error(err)
+    next(err)
   }
-};
-
+}
 
 /** GET all coupons (admin only) */
 export const getCoupons = async (req, res, next) => {
   try {
-    const coupons = await Coupon.find().sort({ createdAt: -1 });
-    res.json(coupons);
+    const coupons = await Coupon.find().sort({ createdAt: -1 })
+    res.json(coupons)
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 /** GET single coupon by ID (admin only) */
 export const getCouponById = async (req, res, next) => {
   try {
-    const coupon = await Coupon.findById(req.params.id);
-    if (!coupon) return res.status(404).json({ message: "Coupon not found" });
-    res.json(coupon);
+    const coupon = await Coupon.findById(req.params.id)
+    if (!coupon) return res.status(404).json({ message: 'Coupon not found' })
+    res.json(coupon)
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 /** UPDATE coupon (admin only) */
 export const updateCoupon = async (req, res, next) => {
   try {
-    const { code, discountPercent, discountAmount, expiresAt, minOrderValue, maxUses } = req.body;
+    const {
+      code,
+      discountPercent,
+      discountAmount,
+      expiresAt,
+      minOrderValue,
+      maxUses
+    } = req.body
 
-    const coupon = await Coupon.findById(req.params.id);
-    if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+    const coupon = await Coupon.findById(req.params.id)
+    if (!coupon) return res.status(404).json({ message: 'Coupon not found' })
 
     // ✅ unique code check
     if (code && code.toUpperCase() !== coupon.code) {
-      const exists = await Coupon.findOne({ code: code.toUpperCase() });
-      if (exists) return res.status(400).json({ message: "Coupon code already exists" });
-      coupon.code = code.toUpperCase();
+      const exists = await Coupon.findOne({ code: code.toUpperCase() })
+      if (exists)
+        return res.status(400).json({ message: 'Coupon code already exists' })
+      coupon.code = code.toUpperCase()
     }
 
-    if (discountPercent !== undefined) coupon.discountPercent = discountPercent;
-    if (discountAmount !== undefined) coupon.discountAmount = discountAmount;
-    if (expiresAt !== undefined) coupon.expiresAt = expiresAt;
-    if (minOrderValue !== undefined) coupon.minOrderValue = minOrderValue;
-    if (maxUses !== undefined) coupon.maxUses = maxUses;
+    if (discountPercent !== undefined) coupon.discountPercent = discountPercent
+    if (discountAmount !== undefined) coupon.discountAmount = discountAmount
+    if (expiresAt !== undefined) coupon.expiresAt = expiresAt
+    if (minOrderValue !== undefined) coupon.minOrderValue = minOrderValue
+    if (maxUses !== undefined) coupon.maxUses = maxUses
 
-    await coupon.save();
-    res.json({ message: "Coupon updated successfully", coupon });
+    await coupon.save()
+    res.json({ message: 'Coupon updated successfully', coupon })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 /** Toggle coupon isActive (admin only) */
 export const toggleCouponActive = async (req, res, next) => {
   try {
-    const coupon = await Coupon.findById(req.params.id);
-    if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+    const coupon = await Coupon.findById(req.params.id)
+    if (!coupon) return res.status(404).json({ message: 'Coupon not found' })
 
-    coupon.isActive = !coupon.isActive; // ✅ flip the boolean
-    await coupon.save();
+    coupon.isActive = !coupon.isActive // ✅ flip the boolean
+    await coupon.save()
 
     res.json({
-      message: `Coupon is now ${coupon.isActive ? "active" : "inactive"}`,
-      coupon,
-    });
+      message: `Coupon is now ${coupon.isActive ? 'active' : 'inactive'}`,
+      coupon
+    })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 /** DELETE coupon (admin only) */
 export const deleteCoupon = async (req, res, next) => {
   try {
-    const coupon = await Coupon.findByIdAndDelete(req.params.id);
-    if (!coupon) return res.status(404).json({ message: "Coupon not found" });
-    res.json({ message: "Coupon deleted successfully" });
+    const coupon = await Coupon.findByIdAndDelete(req.params.id)
+    if (!coupon) return res.status(404).json({ message: 'Coupon not found' })
+    res.json({ message: 'Coupon deleted successfully' })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 // Admin cancels any order
 export const cancelOrderAdmin = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id).populate("user");
-    if (!order) return res.status(404).json({ message: "order not found" });
+    const order = await Order.findById(req.params.id).populate('user')
+    if (!order) return res.status(404).json({ message: 'order not found' })
 
-    order.status = "Cancelled";
+    order.status = 'Cancelled'
     order.history.push({
-      status: "Cancelled",
-      note: req.body.note || "Cancelled by admin"
-    });
+      status: 'Cancelled',
+      note: req.body.note || 'Cancelled by admin'
+    })
 
-    await order.save();
+    await order.save()
 
     // 🔔 Notify
     await notifyOrderEvent({
       user: order.user,
       order,
-      type: "cancelled_admin"
-    });
+      type: 'cancelled_admin'
+    })
 
-    res.json(order);
+    res.json(order)
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}

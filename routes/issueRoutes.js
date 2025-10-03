@@ -1,6 +1,6 @@
 import express from "express";
 import { validateBody } from "../middlewares/validateMiddleware.js";
-import { createIssue, listIssues, updateIssue } from "../controllers/issuesController.js";
+import { createIssue, getTotalIssues, listIssues, updateIssue } from "../controllers/issuesController.js";
 import { requireAuth, requireEmployeeOrAdmin } from "../middlewares/authMiddleware.js";
 import { createIssueSchema } from "../utils/validator.js";
 
@@ -14,5 +14,7 @@ router.get("/",  requireAuth, requireEmployeeOrAdmin, listIssues);
 
 // Admin: update issue status or message
 router.patch("/:id",  requireAuth, requireEmployeeOrAdmin, updateIssue);
+
+router.get("/total", requireAuth, requireEmployeeOrAdmin, getTotalIssues);
 
 export default router;

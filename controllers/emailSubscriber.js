@@ -3,7 +3,7 @@ import Subscriber from "../models/Subscriber.js";
 import { sendEmail } from "../services/notificationService.js";
 
 
-export async function subscribe(req, res, next) {
+export async function emailSubscribe(req, res, next) {
   try {
     const { email } = req.body;
     if (!email) {

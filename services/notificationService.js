@@ -132,3 +132,43 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
   if (user.phone) await sendSMS(user.phone, message);
   if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
 }
+
+
+export async function notifyIssueEvent({ user, issue, type }) {
+  const templates = {
+    issue_created: "Dear {{name}}, we’ve received your issue report: \"{{message}}\". Our support team will get back to you shortly. – Chuvilaundry",
+    issue_updated: "Dear {{name}}, your issue (#{{id}}) has been updated. Current status: {{status}}. Message: {{message}}"
+  };
+
+  const template = templates[type];
+  if (!template) {
+    console.warn(`No issue template for type: ${type}`);
+    return;
+  }
+
+  const context = {
+    id: issue._id,
+    name: issue.name || user?.name || "Customer",
+    message: issue.message || "",
+    status: issue.status || "open"
+  };
+
+  const message = template.replace(/{{(.*?)}}/g, (_, key) => context[key.trim()] || "");
+
+  // Save notification
+  await Notification.create({
+    user: user?._id || user?.id,
+    title: type === "issue_created" ? "Issue Created" : "Issue Updated",
+    message,
+    type: "issue"
+  });
+
+  // Send SMS + Email
+  if (user?.phone || issue.phone) {
+    await sendSMS(user?.phone || issue.phone, message);
+  }
+
+  if (user?.email || issue.email) {
+    await sendEmail(user?.email || issue.email, "Issue Notification", `<p>${message}</p>`);
+  }
+}
