@@ -133,11 +133,10 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
   if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
 }
 
-
 export async function notifyIssueEvent({ user, issue, type }) {
   const templates = {
     issue_created: "Dear {{name}}, we’ve received your issue report: \"{{message}}\". Our support team will get back to you shortly. – Chuvilaundry",
-    issue_updated: "Dear {{name}}, your issue (#{{id}}) has been updated. Current status: {{status}}. Message: {{message}}"
+    issue_updated: "Dear {{name}}, your issue (#{{id}}) has been updated. Current status: {{status}}. Latest message: {{message}}"
   };
 
   const template = templates[type];
@@ -146,28 +145,35 @@ export async function notifyIssueEvent({ user, issue, type }) {
     return;
   }
 
+  // 👇 get latest message from conversation thread
+  const latestMessage = issue.messages && issue.messages.length
+    ? issue.messages[issue.messages.length - 1].content
+    : '';
+
   const context = {
     id: issue._id,
-    name: issue.name || user?.name || "Customer",
-    message: issue.message || "",
+    name: issue.fullName || user?.name || "Customer",
+    message: latestMessage,
     status: issue.status || "open"
   };
 
+  // Replace placeholders in template
   const message = template.replace(/{{(.*?)}}/g, (_, key) => context[key.trim()] || "");
 
-  // Save notification
+  // Save notification to DB
   await Notification.create({
     user: user?._id || user?.id,
     title: type === "issue_created" ? "Issue Created" : "Issue Updated",
     message,
-    type: "issue"
+    type: "issue" // make sure 'issue' is in Notification enum
   });
 
-  // Send SMS + Email
+  // Send SMS
   if (user?.phone || issue.phone) {
     await sendSMS(user?.phone || issue.phone, message);
   }
 
+  // Send Email
   if (user?.email || issue.email) {
     await sendEmail(user?.email || issue.email, "Issue Notification", `<p>${message}</p>`);
   }
