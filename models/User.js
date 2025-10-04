@@ -25,7 +25,7 @@ const UserSchema = new mongoose.Schema({
   defaultPassword: { type: String, select: false },
   membershipStartedAt: Date,
   addresses: [AddressSchema],
-  referralCode: { type: String, unique: true },
+  referralCode: { type: String, unique: true, sparse: true },
   referredBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

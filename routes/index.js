@@ -10,6 +10,7 @@ import reviewRoutes from "./reviewRoutes.js";
 import subscriptionRoutes from "./subcriptionRoutes.js";
 import issueRoutes from "./issueRoutes.js";
 import emailSubscriberRoutes from "./emailsubscriberRoutes.js";
+import employeeRoutes from "./employeeRoutes.js";
 
 
 const router = Router();
@@ -25,5 +26,6 @@ router.use('/api/notifications', notificationRoutes);
 router.use('/subscriptions', subscriptionRoutes);
 router.use("/issues", issueRoutes);
 router.use("/", emailSubscriberRoutes);
+router.use("/employee", employeeRoutes);
 
 export default router;

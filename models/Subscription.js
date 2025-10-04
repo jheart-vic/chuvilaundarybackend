@@ -66,7 +66,7 @@ const subscriptionSchema = new mongoose.Schema(
     rollover_cap_pct: { type: Number, default: 25 },
     rollover_balance: { type: Number, default: 0 },
     pause_count_qtr: { type: Number, default: 0 },
-
+    canceled_reason: { type: String },
     delivery_zone_status: {
       type: String,
       enum: ["INSIDE", "OUTSIDE"],

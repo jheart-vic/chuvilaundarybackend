@@ -45,7 +45,7 @@ export async function getRetailItemPrice (
  * Compute delivery fee for retail order by distance.
  * Uses ServicePricing + Config overrides.
  */
-export async function computeRetailDeliveryFee (distanceKm, { pricing }) {
+export async function computeRetailDeliveryFee (distanceKm, { pricing } = {}) {
   if (!pricing) return 0
 
   const included = pricing.delivery_km_included || 0

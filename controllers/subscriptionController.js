@@ -3,128 +3,137 @@ import Subscription from '../models/Subscription.js'
 import SubscriptionPlan from '../models/SubscriptionPlan.js'
 import SubUsage from '../models/SubUsage.js'
 import { DateTime } from 'luxon'
-
+import { initMonnifyPayment } from '../utils/monnify.js'
 
 /**
  *  - Creates a PENDING subscription
  */
 export const subscribe = async (req, res, next) => {
   try {
-    const userId = req.user._id;
-    const { planCode } = req.body;
+    const userId = req.user._id
+    const { planCode } = req.body
 
     // 🔍 Find subscription plan
-    const plan = await SubscriptionPlan.findOne({ code: planCode });
-    if (!plan) return res.status(404).json({ message: "Plan not found" });
+    const plan = await SubscriptionPlan.findOne({ code: planCode })
+    if (!plan) return res.status(404).json({ message: 'Plan not found' })
 
     // ❌ Prevent duplicate active plan
     const existing = await Subscription.findOne({
       customer: userId,
       plan_code: planCode,
-      status: "ACTIVE",
-    });
+      status: 'ACTIVE'
+    })
     if (existing)
-      return res.status(400).json({ message: "You already have this plan active" });
+      return res
+        .status(400)
+        .json({ message: 'You already have this plan active' })
 
     // 🧹 Cancel other active subs
     await Subscription.updateMany(
-      { customer: userId, status: "ACTIVE" },
+      { customer: userId, status: 'ACTIVE' },
       {
         $set: {
-          status: "CANCELLED",
-          ended_at: DateTime.now().setZone("Africa/Lagos").toJSDate(),
-        },
+          status: 'CANCELLED',
+          ended_at: DateTime.now().setZone('Africa/Lagos').toJSDate(),
+          cancelled_reason: 'New plan subscribed'
+        }
       }
-    );
+    )
 
     // 🕓 Create new pending subscription
-    const now = DateTime.now().setZone("Africa/Lagos");
+    const now = DateTime.now().setZone('Africa/Lagos')
     const subscription = await Subscription.create({
       customer: userId,
       plan_code: plan.code,
       plan: plan._id,
-      status: "PENDING",
+      status: 'PENDING',
       start_date: now.toJSDate(),
       period_start: now.toJSDate(),
       period_end: now.plus({ months: 1 }).toJSDate(),
-      renewal_date: now.plus({ months: 1 }).toJSDate(),
-    });
+      renewal_date: now.plus({ months: 1 }).toJSDate()
+    })
 
     // 💳 Generate Monnify payment link
     const monnifyResponse = await initMonnifyPayment({
-      amount: plan.price,
+      amount: plan.price_ngn,
       customerName: req.user.name,
       customerEmail: req.user.email,
       customerPhone: req.user.phone,
       orderId: subscription._id.toString(),
-      paymentMethod: "CARD",
-    });
+      paymentMethod: 'CARD'
+    })
 
-    const paymentLink = monnifyResponse.checkoutUrl;
+    const paymentLink = monnifyResponse.checkoutUrl
 
     res.status(201).json({
-      message: "Subscription created. Proceed to payment.",
+      message: 'Subscription created. Proceed to payment.',
       subscription,
-      paymentLink,
-    });
+      paymentLink
+    })
   } catch (err) {
-    console.error("Subscribe error:", err);
-    next(err);
+    console.error('Subscribe error:', err)
+    next(err)
   }
-};
-
+}
 
 /**
  *  Payment gateway callback (webhook)
  */
 export const confirmSubscriptionPayment = async (req, res, next) => {
   try {
-    const { eventType, eventData } = req.body;
+    const { eventType, eventData } = req.body
 
     // Only handle successful transactions
-    if (eventType !== "SUCCESSFUL_TRANSACTION") {
-      return res.status(400).json({ message: "Not a successful transaction event" });
+    if (eventType !== 'SUCCESSFUL_TRANSACTION') {
+      return res
+        .status(400)
+        .json({ message: 'Not a successful transaction event' })
     }
 
     // You must ensure this ID is passed when creating the payment on Monnify
-    const subscriptionId = eventData.paymentReference;
-    const subscription = await Subscription.findById(subscriptionId).populate("plan");
+    const subscriptionId = eventData.paymentReference
+    const subscription = await Subscription.findById(subscriptionId).populate(
+      'plan'
+    )
 
     if (!subscription) {
-      return res.status(404).json({ message: "Subscription not found" });
+      return res.status(404).json({ message: 'Subscription not found' })
     }
 
+    if (subscription.status === 'ACTIVE')
+      return res.json({ message: 'Already active' })
+
     // Validate payment status
-    if (eventData.paymentStatus !== "PAID") {
-      subscription.status = "FAILED";
-      await subscription.save();
-      return res.status(400).json({ message: "Payment not completed" });
+    if (eventData.paymentStatus !== 'PAID') {
+      subscription.status = 'FAILED'
+      await subscription.save()
+      return res.status(400).json({ message: 'Payment not completed' })
     }
 
     // ✅ Activate subscription
-    const startDate = DateTime.now().setZone("Africa/Lagos");
-    const endDate = startDate.plus({ months: 1 });
+    const startDate = DateTime.now().setZone('Africa/Lagos')
+    const endDate = startDate.plus({ months: 1 })
 
-    subscription.status = "ACTIVE";
-    subscription.start_date = startDate.toJSDate();
-    subscription.period_start = startDate.toJSDate();
-    subscription.period_end = endDate.toJSDate();
-    subscription.renewal_date = endDate.toJSDate();
+    subscription.status = 'ACTIVE'
+    subscription.start_date = startDate.toJSDate()
+    subscription.period_start = startDate.toJSDate()
+    subscription.period_end = endDate.toJSDate()
+    subscription.renewal_date = endDate.toJSDate()
     subscription.paymentPlan = {
-      method: "CARD",
-      mode: "FULL",
-      gateway: "MONNIFY",
+      method: 'CARD',
+      mode: 'FULL',
+      gateway: 'MONNIFY',
       lastTransactionId: eventData.transactionReference,
-      authorizationRef: eventData.authorizationCode || "",
+      authorizationRef: eventData.authorizationCode || '',
       amountPaid: eventData.amountPaid,
       balance: 0,
-      currency: "NGN",
-    };
+      currency: 'NGN'
+    }
 
-    await subscription.save();
+    await subscription.save()
 
     // 🧾 Create initial usage record
-    const currentPeriod = startDate.toFormat("yyyy-LL");
+    const currentPeriod = startDate.toFormat('yyyy-LL')
     await SubUsage.create({
       subscription: subscription._id,
       period_label: currentPeriod,
@@ -133,17 +142,17 @@ export const confirmSubscriptionPayment = async (req, res, next) => {
       overage_items: 0,
       express_orders_used: 0,
       computed_overage_fee_ngn: 0,
-      on_time_pct: 100,
-    });
+      on_time_pct: 100
+    })
 
     res.json({
-      message: "Payment confirmed. Subscription activated.",
-      subscription,
-    });
+      message: 'Payment confirmed. Subscription activated.',
+      subscription
+    })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 /**
  * Pause subscription

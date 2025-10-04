@@ -14,7 +14,9 @@ const subUsageSchema = new mongoose.Schema(
     express_orders_used: { type: Number, default: 0 },
     sameDay_orders_used: { type: Number, default: 0 },
     computed_overage_fee_ngn: { type: Number, default: 0 },
+    rollover_items: { type: Number, default: 0 },
     on_time_pct: { type: Number, default: 100 }
+
   },
   { timestamps: true }
 )

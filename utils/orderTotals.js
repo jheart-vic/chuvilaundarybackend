@@ -8,6 +8,7 @@ import {
   computeSubscriptionDeliveryFee
 } from './subscriptionPricing.js'
 import { validateAndApplyCoupon } from './coupon.js'
+import ServicePricing from '../models/ServicePricing.js'
 
 // normalize sameDay/express flags
 function normalizeFlags (item, order) {
@@ -63,29 +64,67 @@ export async function computeOrderTotals (
       itemsTotal + addOnsTotal,
       usage
     )
-  } else {
-    // --- RETAIL branch ---
-    for (const item of order.items) {
-      const express = item.express || order.express || false
-      const sameDay = item.sameDay || order.sameDay || false
+  }  else {
+  // --- RETAIL flow ---
+  // 🧩 1. Collect unique service codes
+  const uniqueCodes = [...new Set(order.items.map(i => i.serviceCode))]
 
-      const unitPrice = await getRetailItemPrice(
-        item.serviceCode,
-        order.serviceTier,
-        { express, sameDay }
-      )
+  // 🧾 2. Fetch all relevant retail pricing entries in one query
+  const pricings = await ServicePricing.find({
+    serviceCode: { $in: uniqueCodes },
+    serviceTier: order.serviceTier,
+    pricingModel: 'RETAIL'
+  })
 
-      item.price = unitPrice
-      itemsTotal += unitPrice * (item.quantity || 1)
+  // 🚨 3. Validate pricing availability
+  if (pricings.length !== uniqueCodes.length) {
+    const foundCodes = pricings.map(p => p.serviceCode)
+    const missingCodes = uniqueCodes.filter(c => !foundCodes.includes(c))
+    throw new Error(`Missing retail pricing for: ${missingCodes.join(', ')}`)
+  }
 
-      if (item.addOns?.length) {
-        addOnsTotal += item.addOns.reduce((sum, a) => sum + (a.price || 0), 0)
-      }
+  // 🧠 4. Create quick-access map (serviceCode → pricing)
+  const pricingMap = new Map(pricings.map(p => [p.serviceCode, p]))
+
+  // 🧮 5. Compute totals for items and add-ons
+  for (const item of order.items) {
+    const { express, sameDay } = normalizeFlags(item, order)
+
+    // Get the correct pricing entry for this service
+    const pricing = pricingMap.get(item.serviceCode)
+    if (!pricing) {
+      throw new Error(`No pricing found for serviceCode: ${item.serviceCode}`)
     }
 
-    const distanceKm = order.delivery?.distanceKm || 0
-    deliveryFee = await computeRetailDeliveryFee(distanceKm)
+    // ⚙️ 5a. Use shared util to get retail item price
+    const unitPrice = await getRetailItemPrice(
+      item.serviceCode,
+      order.serviceTier,
+      { express, sameDay }
+    )
+
+    // Apply quantity
+    item.price = unitPrice
+    itemsTotal += unitPrice * (item.quantity || 1)
+
+    // ⚙️ 5b. Handle add-ons (optional extras)
+    if (item.addOns?.length) {
+      addOnsTotal += item.addOns.reduce((sum, a) => sum + (a.price || 0), 0)
+    }
   }
+
+  // 🚚 6. Compute delivery fee — take the *highest* among all matched services
+  const distanceKm = order.delivery?.distanceKm || 0
+  let maxDeliveryFee = 0
+
+  for (const pricing of pricings) {
+    const fee = await computeRetailDeliveryFee(distanceKm, { pricing })
+    if (fee > maxDeliveryFee) maxDeliveryFee = fee
+  }
+
+  deliveryFee = maxDeliveryFee
+}
+
 
   const subtotal = itemsTotal + addOnsTotal + deliveryFee
 
