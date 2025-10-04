@@ -22,6 +22,7 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     default: null
   },
+  defaultPassword: { type: String, select: false },
   membershipStartedAt: Date,
   addresses: [AddressSchema],
   referralCode: { type: String, unique: true },

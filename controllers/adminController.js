@@ -81,42 +81,30 @@ export const createEmployee = async (req, res, next) => {
   try {
     const { phone, fullName, workRole } = req.body
 
-    // Validate required fields
     if (!phone || !fullName) {
       return res.status(400).json({ message: 'Phone & full name are required' })
     }
-
     if (!workRole) {
       return res.status(400).json({ message: 'Work role is required' })
     }
 
-    // Check for existing user
     const existingUser = await User.findOne({ phone })
     if (existingUser) {
-      return res
-        .status(400)
-        .json({ message: 'User with this phone already exists' })
+      return res.status(400).json({ message: 'User with this phone already exists' })
     }
 
-    // Generate referral code
     const referralCode = generateReferralCode()
 
-    // ✅ Generate random 4-letter word
     const randomWord = Array.from(
       { length: 4 },
-      () => String.fromCharCode(97 + Math.floor(Math.random() * 26)) // a-z
+      () => String.fromCharCode(97 + Math.floor(Math.random() * 26))
     ).join('')
-
-    // ✅ Generate random number (e.g., 1000–9999)
     const randomNumber = Math.floor(1000 + Math.random() * 9000)
 
-    // ✅ Build password: Chuvi + 4-letter word + number
     const defaultPassword = `Chuvi${randomWord}${randomNumber}`
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(defaultPassword, 10)
 
-    // Create new employee
     const newUser = await User.create({
       phone,
       fullName,
@@ -124,7 +112,8 @@ export const createEmployee = async (req, res, next) => {
       workRole,
       password: hashedPassword,
       referralCode,
-      isVerified: true
+      isVerified: true,
+      defaultPassword,
     })
 
     const user = await User.findById(newUser._id).lean()
@@ -138,6 +127,7 @@ export const createEmployee = async (req, res, next) => {
     next(err)
   }
 }
+
 
 // Total employees
 export const getTotalEmployees = async (req, res, next) => {
@@ -211,9 +201,10 @@ export async function getTotalOrders(req, res, next) {
 // list all employees (admin only)
 export const listEmployees = async (req, res, next) => {
   try {
-    const employees = await User.find({ role: 'employee' }).sort({
-      createdAt: -1
-    })
+    const employees = await User.find({ role: 'employee' })
+      .select('+defaultPassword -password')
+      .sort({ createdAt: -1 })
+
     res.json(employees)
   } catch (err) {
     next(err)
