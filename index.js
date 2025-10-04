@@ -9,6 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import monnifyWebhook from "./routes/monnifyWebhook.js";
+import subscriptionWebhook from "./routes/subscriptionWebhook.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +28,7 @@ app.use("/uploads", express.static(path.join(__dirname, "..", process.env.UPLOAD
 // mount api
 app.use("/api", routes);
 app.use("/api", monnifyWebhook);
+app.use("/api", subscriptionWebhook);
 
 // health
 app.get("/", (req, res) => res.json({ ok: true }));

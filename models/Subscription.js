@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// ✅ Subscription Payment Plan Schema (Monnify-ready)
+// ✅ Payment plan subdocument (Monnify-ready)
 const PaymentPlanSchema = new mongoose.Schema(
   {
     method: {
@@ -15,7 +15,7 @@ const PaymentPlanSchema = new mongoose.Schema(
     },
     gateway: {
       type: String,
-      enum: ["MONNIFY"], // lock to Monnify since that’s your only PSP
+      enum: ["MONNIFY"],
       default: "MONNIFY",
       required: true,
     },
@@ -34,8 +34,6 @@ const PaymentPlanSchema = new mongoose.Schema(
         },
       },
     ],
-
-    // 🔑 Helpful for retries / billing cycles
     nextBillingDate: { type: Date },
     lastBillingAttempt: { type: Date },
     failedAttempts: { type: Number, default: 0 },
@@ -44,23 +42,31 @@ const PaymentPlanSchema = new mongoose.Schema(
   { _id: false }
 );
 
-
-
+// ✅ Subscription schema
 const subscriptionSchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     plan_code: { type: String, required: true },
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: "SubscriptionPlan" },
+
     status: {
       type: String,
-      enum: ["ACTIVE", "PAUSED", "CANCEL_AT_PERIOD_END"],
-      default: "ACTIVE",
+      enum: ["ACTIVE", "PAUSED", "CANCEL_AT_PERIOD_END", "CANCELLED", "PENDING", "FAILED"],
+      default: "PENDING",
     },
-    paymentPlan: PaymentPlanSchema, // 👈 attach here
+
+    paymentPlan: PaymentPlanSchema,
     start_date: { type: Date, default: Date.now },
+    period_start: { type: Date, required: true },
+    period_end: { type: Date, required: true },
     renewal_date: { type: Date, required: true },
+    ended_at: { type: Date },
+    renewal_count: { type: Number, default: 0 },
+
     rollover_cap_pct: { type: Number, default: 25 },
     rollover_balance: { type: Number, default: 0 },
     pause_count_qtr: { type: Number, default: 0 },
+
     delivery_zone_status: {
       type: String,
       enum: ["INSIDE", "OUTSIDE"],

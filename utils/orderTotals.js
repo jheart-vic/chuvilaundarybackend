@@ -91,7 +91,15 @@ export async function computeOrderTotals (
 
   // --- Coupon ---
   let discount = 0
-  if (order.couponCode) {
+ // ✅ Automatic overage detection
+  const isRetail = pricingModel === 'RETAIL'
+  const isOverageOrder =
+    pricingModel === 'SUBSCRIPTION' &&
+    usage &&
+    usage.items_used >= plan?.monthly_items
+  const allowCoupon = isRetail || isOverageOrder
+
+  if (allowCoupon && order.couponCode) {
     try {
       const result = await validateAndApplyCoupon(
         order.couponCode,
@@ -103,6 +111,7 @@ export async function computeOrderTotals (
       discount = 0
     }
   }
+
 
   const grandTotal = Math.max(0, subtotal - discount)
 
