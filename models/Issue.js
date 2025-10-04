@@ -1,15 +1,27 @@
-///models/Issue.js
 import mongoose from 'mongoose';
 
-
-const IssueSchema = new mongoose.Schema({
-name: { type: String, required: true },
-phone: { type: String, required: true },
-order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: false },
-message: { type: String, required: true },
-status: { type: String, enum: ['open', 'in_progress', 'resolved', 'closed'], default: 'open' },
-createdAt: { type: Date, default: Date.now }
+const MessageSchema = new mongoose.Schema({
+  sender: {
+    type: String,
+    enum: ['customer', 'admin'],
+    required: true
+  },
+  content: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
 });
 
+const IssueSchema = new mongoose.Schema({
+  fullName: { type: String, required: true },
+  phone: { type: String, required: true },
+  order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: false },
+  status: {
+    type: String,
+    enum: ['open', 'in_progress', 'resolved', 'closed'],
+    default: 'open'
+  },
+  // 👇 Original customer's initial message stored as the first entry in messages
+  messages: [MessageSchema],
+  createdAt: { type: Date, default: Date.now }
+});
 
 export default mongoose.model('Issue', IssueSchema);
