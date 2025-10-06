@@ -5,27 +5,22 @@ import mongoose from 'mongoose';
 // User creates a review for an order
 export async function createReview(req, res, next) {
   try {
-    const { rating, comment, order } = req.validated;
+    const { rating, comment, order } = req.body;
 
-    // 1. Validate order
     const foundOrder = await Order.findById(order);
     if (!foundOrder) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    // 2. Ensure the review belongs to the user
     if (String(foundOrder.user) !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to review this order' });
     }
 
-    // 3. Only delivered orders can be reviewed
     if (foundOrder.status !== 'Delivered') {
       return res.status(400).json({ success: false, message: 'You can only review delivered orders' });
     }
 
-    // 4. Prevent duplicate review
     const existing = await Review.findOne({ user: req.user._id, order });
     if (existing) return res.status(400).json({ success: false, message: 'Order already reviewed' });
 
-    // 5. Create review
     const review = await Review.create({
       user: req.user._id,
       order,
@@ -33,9 +28,9 @@ export async function createReview(req, res, next) {
       comment
     });
 
-    // 6. Incrementally update order's rating and review count
     foundOrder.reviewCount = (foundOrder.reviewCount || 0) + 1;
-    foundOrder.rating = ((foundOrder.rating || 0) * (foundOrder.reviewCount - 1) + rating) / foundOrder.reviewCount;
+    foundOrder.rating =
+      ((foundOrder.rating || 0) * (foundOrder.reviewCount - 1) + rating) / foundOrder.reviewCount;
     await foundOrder.save();
 
     res.status(201).json({ success: true, review });
@@ -43,6 +38,7 @@ export async function createReview(req, res, next) {
     next(err);
   }
 }
+
 
 //Admin or user can list reviews for an order
 export async function listReviews(req, res, next) {
