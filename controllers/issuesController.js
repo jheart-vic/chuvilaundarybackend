@@ -9,7 +9,7 @@ dotenv.config()
 
 export async function createIssue (req, res, next) {
   try {
-    const { fullName, phone, order, message } = req.validated || req.body
+    const { fullName, phone, order, message }  = req.body
 
     const issue = await Issue.create({
       fullName,
