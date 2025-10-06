@@ -1,6 +1,7 @@
 // controllers/serviceController.js
 import Service from "../models/Service.js";
 import ServicePricing from "../models/ServicePricing.js";
+import { calculateTierPrice } from "../utils/pricingHelper.js";
 
 // Customer-facing: list services with retail pricing included
 export const listServices = async (req, res, next) => {
@@ -34,8 +35,7 @@ export const createService = async (req, res, next) => {
     const payload = req.body;
     const service = await Service.create(payload);
 
-    // Define retail tiers only
-    const retailTiers = ["STANDARD", "PREMIUM", "SIGNATURE"];
+    const retailTiers = ["STANDARD", "PREMIUM", "VIP"];
 
     for (const tier of retailTiers) {
       const existingPricing = await ServicePricing.findOne({
@@ -45,17 +45,13 @@ export const createService = async (req, res, next) => {
       });
 
       if (!existingPricing) {
-        let defaultPrice = service.basePrice || 1000;
-
-        // Adjust price according to tier
-        if (tier === "PREMIUM") defaultPrice = Math.round(defaultPrice * 1.4);
-        if (tier === "SIGNATURE") defaultPrice = Math.round(defaultPrice * 2.0);
+        const price = calculateTierPrice(service.basePrice || 1000, tier);
 
         await ServicePricing.create({
           serviceCode: service.code,
           serviceTier: tier,
           pricingModel: "RETAIL",
-          pricePerItem: defaultPrice,
+          pricePerItem: price,
         });
       }
     }
@@ -66,7 +62,7 @@ export const createService = async (req, res, next) => {
   }
 };
 
-/** Update a service (admin only) */
+/** Update service + recalc pricing tiers if base price changes */
 export const updateService = async (req, res, next) => {
   try {
     const service = await Service.findById(req.params.id);
@@ -76,18 +72,15 @@ export const updateService = async (req, res, next) => {
     Object.assign(service, req.body);
     await service.save();
 
-    // If basePrice was updated, recalc retail tiers
     if (req.body.basePrice && req.body.basePrice !== oldBasePrice) {
-      const retailTiers = ["STANDARD", "PREMIUM", "SIGNATURE"];
-      for (const tier of retailTiers) {
-        let defaultPrice = service.basePrice;
+      const retailTiers = ["STANDARD", "PREMIUM", "VIP"];
 
-        if (tier === "PREMIUM") defaultPrice = Math.round(defaultPrice * 1.4);
-        if (tier === "SIGNATURE") defaultPrice = Math.round(defaultPrice * 2.0);
+      for (const tier of retailTiers) {
+        const newPrice = calculateTierPrice(service.basePrice, tier);
 
         await ServicePricing.findOneAndUpdate(
           { serviceCode: service.code, serviceTier: tier, pricingModel: "RETAIL" },
-          { pricePerItem: defaultPrice },
+          { pricePerItem: newPrice },
           { new: true }
         );
       }

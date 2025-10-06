@@ -7,7 +7,7 @@ const subscriptionPlanSchema = new mongoose.Schema(
     family: { type: String, enum: ["BASIC_SAVER", "PREM_CHOICE", "VIP"] },
     tier: {
       type: String,
-      enum: ["STANDARD", "PREMIUM", "SIGNATURE"],
+      enum: ["STANDARD", "PREMIUM", "VIP"],
       required: true
     },
 

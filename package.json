@@ -30,7 +30,11 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.6",
     "sharp": "^0.34.4",
+    "socket.io": "^4.8.1",
     "streamifier": "^0.1.1",
     "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
   }
 }

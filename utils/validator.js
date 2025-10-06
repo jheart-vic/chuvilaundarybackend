@@ -142,7 +142,7 @@ export const createOrderSchema = Joi.object({
   userName: Joi.string().min(1).max(200).optional(),
 
   serviceTier: Joi.string()
-    .valid("STANDARD", "PREMIUM", "SIGNATURE", "EXPRESS")
+    .valid("STANDARD", "PREMIUM", "VIP")
     .optional(),
 
   items: Joi.array()
@@ -197,11 +197,20 @@ export const createOrderSchema = Joi.object({
   }).required(),
 
   couponCode: Joi.string().trim().uppercase().optional(),
-
   notes: Joi.string().allow("", null).optional(),
   express: Joi.boolean().optional(),
   sameDay: Joi.boolean().optional(),
-}).custom((value, helpers) => {
+
+  payment: Joi.object({
+    method: Joi.string()
+      .valid("CARD", "BANK_TRANSFER", "CASH", "WALLET", "SUBSCRIPTION")
+      .required(),
+    mode: Joi.string().valid("FULL", "INSTALLMENT").optional(),
+  }).required(),
+
+  photos: Joi.array().items(Joi.string().uri()).optional(),
+})
+.custom((value, helpers) => {
   const sameDayCount = value.items
     .filter((i) => i.sameDay || value.sameDay)
     .reduce((sum, i) => sum + (i.quantity || 0), 0);
@@ -214,6 +223,7 @@ export const createOrderSchema = Joi.object({
 
   return value;
 });
+
 
 export const applyCouponSchema = Joi.object({
   code: Joi.string().required(),

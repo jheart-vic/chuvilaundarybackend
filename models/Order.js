@@ -118,7 +118,7 @@ const OrderSchema = new mongoose.Schema(
     },
     serviceTier: {
       type: String,
-      enum: ['STANDARD', 'PREMIUM', 'SIGNATURE'],
+      enum: ['STANDARD', 'PREMIUM', 'VIP'],
       required: true
     },
 

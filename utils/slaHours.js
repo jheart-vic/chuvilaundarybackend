@@ -4,7 +4,7 @@ import { DateTime } from "luxon";
 /**
  * Compute expected ready date based on tier SLA.
  * - startDate: Date instance or ISO string
- * - tier: string ("STANDARD", "PREMIUM", "SIGNATURE", etc.)
+ * - tier: string ("STANDARD", "PREMIUM", "VIP", etc.)
  * - options: { express: boolean, sameDay: boolean }
  *
  * Returns a plain JS Date (suitable for Mongo).
@@ -17,7 +17,7 @@ export function computeExpectedReadyAt(
   let hours = 48; // default SLA
 
   // Base SLA by tier
-  if (tier === "SIGNATURE") hours = 24;
+  if (tier === "VIP") hours = 24;
   if (tier === "PREMIUM") hours = 36; // optional if you want intermediate tier
 
   // Same-day overrides everything else
