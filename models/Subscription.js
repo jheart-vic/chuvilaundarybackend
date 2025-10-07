@@ -51,7 +51,7 @@ const subscriptionSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["ACTIVE", "PAUSED", "CANCEL_AT_PERIOD_END", "CANCELLED", "PENDING", "FAILED"],
+      enum: ["ACTIVE", "PAUSED", "CANCEL_AT_PERIOD_END", "CANCELLED", "PENDING", "FAILED", "AUTO_PAYMENT_CANCELLED"],
       default: "PENDING",
     },
 
@@ -62,6 +62,9 @@ const subscriptionSchema = new mongoose.Schema(
     renewal_date: { type: Date, required: true },
     ended_at: { type: Date },
     renewal_count: { type: Number, default: 0 },
+    monnifyPaymentReference: { type: String }, // For recurring payments (mandates)
+    auto_payment_cancelled: { type: Boolean, default: false },
+    usage: [{ type: mongoose.Schema.Types.ObjectId, ref: "SubUsage" }],
 
     rollover_cap_pct: { type: Number, default: 25 },
     rollover_balance: { type: Number, default: 0 },

@@ -1,81 +1,204 @@
-// routes/monnifyWebhook.js
 import express from "express";
+import crypto from "crypto";
+import { DateTime } from "luxon";
 import Order from "../models/Order.js";
+import Subscription from "../models/Subscription.js";
+import SubUsage from "../models/SubUsage.js";
 import { notifyOrderEvent } from "../services/notificationService.js";
-
 
 const router = express.Router();
 
 /**
- * Monnify Webhook
- * - Configure the URL in Monnify Dashboard
- * - Example: https://yourdomain.com/api/webhook/monnify
+ * ✅ Verify Monnify webhook signature using raw body
+ */
+function verifySignature(req) {
+  try {
+    const secret = process.env.MONNIFY_SECRET_KEY;
+    const signature = req.headers["monnify-signature"];
+
+    if (!signature || !secret) return false;
+
+    const computedSignature = crypto
+      .createHmac("sha512", secret)
+      .update(req.rawBody) // ✅ Use raw body captured by express.json verify()
+      .digest("hex");
+
+    return signature === computedSignature;
+  } catch (err) {
+    console.error("❌ Signature verification error:", err);
+    return false;
+  }
+}
+
+/**
+ * ✅ Unified webhook handler for:
+ * - Order payments
+ * - Subscription one-time payments
+ * - Subscription recurring payments
  */
 router.post("/webhook/monnify", async (req, res) => {
   try {
     const payload = req.body;
-    console.log("🔔 Monnify Webhook Received:", payload);
+    console.log("🔔 Monnify Webhook Received:", {
+      eventType: payload?.eventType,
+      reference: payload?.eventData?.transactionReference,
+    });
 
+    // === Validate payload ===
     if (!payload?.eventType || !payload?.eventData) {
       return res.status(400).json({ message: "Invalid webhook payload" });
     }
 
+    // === Verify Monnify signature ===
+    if (!verifySignature(req)) {
+      console.warn("⚠️ Invalid Monnify signature detected");
+      return res.status(401).json({ message: "Invalid signature" });
+    }
+
+    const { eventType, eventData } = payload;
     const {
       paymentReference,
       transactionReference,
       paymentStatus,
       paidAmount,
-    } = payload.eventData;
+    } = eventData;
 
-    // 🔎 Find order linked to this transaction
+    const success = ["PAID", "SUCCESS"].includes(paymentStatus);
+
+    // === 🧠 Idempotency check for Orders ===
+    const existingOrder = await Order.findOne({
+      "payment.transactionId": transactionReference,
+      "payment.status": "PAID",
+    });
+
+    if (existingOrder) {
+      console.log("♻️ Duplicate webhook ignored for Order:", existingOrder._id);
+      return res.status(200).json({ message: "Order already processed" });
+    }
+
+    // === 1️⃣ Handle ORDER payments ===
     const order = await Order.findOne({
       "payment.transactionId": transactionReference,
     }).populate("user");
 
-    if (!order) {
-      console.warn("⚠️ Order not found for transaction:", transactionReference);
-      return res.status(404).json({ message: "Order not found" });
-    }
+    if (order) {
+      console.log(`📦 Processing Order payment for ID: ${order._id}`);
 
-    // 📝 Update payment status
-    let notifyType = null;
-    if (paymentStatus === "PAID" || paymentStatus === "SUCCESS") {
-      order.payment.amountPaid = paidAmount;
-      order.payment.balance = 0;
-      order.payment.status = "PAID";
-      order.payment.paymentReference = paymentReference; // ✅ Save Monnify reference
-      order.status = "Confirmed";
-      order.history.push({ status: "Confirmed", note: "Payment successful" });
-      notifyType = "payment_success";
-    } else {
-      order.payment.status = "FAILED";
-      order.payment.paymentReference = paymentReference; // ✅ Still save it
-      order.history.push({ status: "Failed", note: "Payment failed" });
-      notifyType = "payment_failed";
-    }
+      order.payment.amountPaid = success ? paidAmount : 0;
+      order.payment.balance = success ? 0 : order.payment.balance;
+      order.payment.status = success ? "PAID" : "FAILED";
+      order.payment.paymentReference = paymentReference;
 
-    await order.save();
+      const statusNote = success ? "Payment successful" : "Payment failed";
+      order.status = success ? "Confirmed" : "Pending";
+      order.history.push({ status: order.status, note: statusNote });
 
-    // 🔔 Send notification using correct template
-    if (notifyType === "payment_success") {
+      await order.save();
+
       await notifyOrderEvent({
         user: order.user,
         order,
-        type: "orderDelivered", // or you can add a new "paymentSuccess" template
-        extra: { amount: order.payment.amountPaid, method: order.payment.method },
+        type: success ? "orderDelivered" : "payment_failed",
+        extra: success
+          ? { amount: order.payment.amountPaid, method: order.payment.method }
+          : undefined,
       });
-    } else if (notifyType === "payment_failed") {
-      await notifyOrderEvent({
-        user: order.user,
-        order,
-        type: "payment_failed", // add template for this
-      });
+
+      console.log(
+        success
+          ? `✅ Order payment confirmed: ${order._id}`
+          : `❌ Order payment failed: ${order._id}`
+      );
+
+      return res.status(200).json({ message: "Order webhook processed" });
     }
 
-    res.status(200).json({ message: "Webhook processed" });
+    // === 🧠 Idempotency check for Subscriptions ===
+    const existingSub = await Subscription.findOne({
+      "paymentPlan.lastTransactionId": transactionReference,
+    });
+    if (existingSub) {
+      console.log("♻️ Duplicate webhook ignored for Subscription:", existingSub._id);
+      return res.status(200).json({ message: "Subscription already processed" });
+    }
+
+    // === 2️⃣ Handle SUBSCRIPTION payments (One-time or recurring) ===
+    const subscription = await Subscription.findOne({
+      $or: [
+        { _id: paymentReference }, // one-time or manual reference
+        { monnifyPaymentReference: paymentReference }, // recurring
+      ],
+    }).populate("plan");
+
+    if (subscription) {
+      console.log(`💳 Processing Subscription payment: ${subscription._id}`);
+
+      const now = DateTime.now().setZone("Africa/Lagos");
+
+      if (success) {
+        subscription.paymentPlan.lastTransactionId = transactionReference;
+        subscription.paymentPlan.amountPaid += paidAmount;
+        subscription.paymentPlan.balance = 0;
+        subscription.paymentPlan.failedAttempts = 0;
+
+        subscription.status = "ACTIVE";
+
+        // For recurring: just extend the next period
+        const newPeriodStart = subscription.period_end
+          ? DateTime.fromJSDate(subscription.period_end)
+          : now;
+
+        subscription.period_start = newPeriodStart.toJSDate();
+        subscription.period_end = newPeriodStart.plus({ months: 1 }).toJSDate();
+        subscription.renewal_date = newPeriodStart.plus({ months: 1 }).toJSDate();
+        subscription.start_date = subscription.start_date || now.toJSDate();
+        subscription.renewal_count += 1;
+
+        await subscription.save();
+
+        // Create/update monthly usage record
+        const periodLabel = now.toFormat("yyyy-LL");
+        await SubUsage.findOneAndUpdate(
+          { subscription: subscription._id, period_label: periodLabel },
+          {
+            $setOnInsert: {
+              subscription: subscription._id,
+              period_label: periodLabel,
+              items_used: 0,
+              trips_used: 0,
+              overage_items: 0,
+              express_orders_used: 0,
+              computed_overage_fee_ngn: 0,
+              on_time_pct: 100,
+            },
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ Subscription active or renewed: ${subscription._id}`);
+      } else {
+        subscription.paymentPlan.failedAttempts += 1;
+        if (subscription.paymentPlan.failedAttempts >= 3) {
+          subscription.status = "PAUSED";
+          console.warn(`⚠️ Subscription auto-paused after 3 failures: ${subscription._id}`);
+        }
+        await subscription.save();
+        console.log(`❌ Subscription payment failed: ${subscription._id}`);
+      }
+
+      return res.status(200).json({ message: "Subscription webhook processed" });
+    }
+
+    // === Nothing matched ===
+    console.warn("⚠️ No matching Order or Subscription found for webhook:", {
+      paymentReference,
+      transactionReference,
+    });
+    return res.status(404).json({ message: "No matching record found" });
+
   } catch (err) {
-    console.error("❌ Webhook error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Monnify Webhook Error:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 

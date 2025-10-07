@@ -30,20 +30,6 @@ router.put("/coupons/:id",requireAuth, requireAdmin, updateCoupon);
 router.patch("/coupons/:id/toggle",requireAuth,requireAdmin,toggleCouponActive);
 
 router.delete("/coupons/:id",requireAuth, requireAdmin, deleteCoupon);
-
-router.post("/create/subcription-plan",requireAuth ,requireAdmin, async (req, res) => {
-  const plan = new SubscriptionPlan(req.body);
-  await plan.save();
-  res.status(201).json(plan);
-});
-
-// List all plans
-router.get("/get-subcription-plan", requireAuth, requireAdmin, async (req, res) => {
-  const plans = await SubscriptionPlan.find();
-  res.json(plans);
-});
-
-
 // Config routes
 router.get('/get-config',  requireAuth, requireAdmin, getAllConfigs);
 router.get('/config/:key', requireAuth, requireAdmin,  getConfig);

@@ -185,14 +185,57 @@
 // runTest().catch((err) => console.error(err));
 
 
-import { io } from "socket.io-client";
+// import { io } from "socket.io-client";
 
-const socket = io("http://localhost:4000"); // your server URL
+// const socket = io("http://localhost:4000"); // your server URL
 
-socket.on("connect", () => {
-  console.log("✅ Connected as client:", socket.id);
-});
+// socket.on("connect", () => {
+//   console.log("✅ Connected as client:", socket.id);
+// });
 
-socket.on("disconnect", () => {
-  console.log("⚠️ Disconnected");
-});
+// socket.on("disconnect", () => {
+//   console.log("⚠️ Disconnected");
+// });
+
+
+import axios from "axios";
+import dotenv from "dotenv";
+dotenv.config();
+
+// Load keys from env (or you can hardcode for testing)
+const API_KEY = process.env.MONNIFY_API_KEY || "MK_TEST_89GW1P7VPU";
+const SECRET_KEY = process.env.MONNIFY_SECRET_KEY || "HDC0CN26SGQ6NYY3P7X6Q11SE7XQPUSH";
+const BASE_URL = process.env.MONNIFY_BASE_URL || "https://sandbox.monnify.com";
+
+// Function to login
+export const monnifyLogin = async () => {
+  try {
+    const auth = Buffer.from(`${API_KEY}:${SECRET_KEY}`).toString("base64");
+
+    const res = await axios.post(
+      `${BASE_URL}/api/v1/auth/login`,
+      {}, // Monnify expects an empty JSON object
+      {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (res.data.requestSuccessful) {
+      console.log("✅ Monnify login successful");
+      console.log("Access token:", res.data.responseBody.accessToken);
+      return res.data.responseBody.accessToken;
+    } else {
+      console.error("❌ Monnify login failed:", res.data.responseCode, res.data.responseMessage);
+      return null;
+    }
+  } catch (err) {
+    console.error("⚠️ Monnify login error:", err.response?.data || err.message);
+    return null;
+  }
+};
+
+// Test login
+monnifyLogin();

@@ -3,7 +3,7 @@ import Subscription from '../models/Subscription.js'
 import SubscriptionPlan from '../models/SubscriptionPlan.js'
 import SubUsage from '../models/SubUsage.js'
 import { DateTime } from 'luxon'
-import { initMonnifyPayment } from '../utils/monnify.js'
+import { initMonnifyPayment, cancelMonnifyMandate } from '../utils/monnify.js'
 
 /**
  *  - Creates a PENDING subscription
@@ -72,84 +72,6 @@ export const subscribe = async (req, res, next) => {
     })
   } catch (err) {
     console.error('Subscribe error:', err)
-    next(err)
-  }
-}
-
-/**
- *  Payment gateway callback (webhook)
- */
-export const confirmSubscriptionPayment = async (req, res, next) => {
-  try {
-    const { eventType, eventData } = req.body
-
-    // Only handle successful transactions
-    if (eventType !== 'SUCCESSFUL_TRANSACTION') {
-      return res
-        .status(400)
-        .json({ message: 'Not a successful transaction event' })
-    }
-
-    // You must ensure this ID is passed when creating the payment on Monnify
-    const subscriptionId = eventData.paymentReference
-    const subscription = await Subscription.findById(subscriptionId).populate(
-      'plan'
-    )
-
-    if (!subscription) {
-      return res.status(404).json({ message: 'Subscription not found' })
-    }
-
-    if (subscription.status === 'ACTIVE')
-      return res.json({ message: 'Already active' })
-
-    // Validate payment status
-    if (eventData.paymentStatus !== 'PAID') {
-      subscription.status = 'FAILED'
-      await subscription.save()
-      return res.status(400).json({ message: 'Payment not completed' })
-    }
-
-    // ✅ Activate subscription
-    const startDate = DateTime.now().setZone('Africa/Lagos')
-    const endDate = startDate.plus({ months: 1 })
-
-    subscription.status = 'ACTIVE'
-    subscription.start_date = startDate.toJSDate()
-    subscription.period_start = startDate.toJSDate()
-    subscription.period_end = endDate.toJSDate()
-    subscription.renewal_date = endDate.toJSDate()
-    subscription.paymentPlan = {
-      method: 'CARD',
-      mode: 'FULL',
-      gateway: 'MONNIFY',
-      lastTransactionId: eventData.transactionReference,
-      authorizationRef: eventData.authorizationCode || '',
-      amountPaid: eventData.amountPaid,
-      balance: 0,
-      currency: 'NGN'
-    }
-
-    await subscription.save()
-
-    // 🧾 Create initial usage record
-    const currentPeriod = startDate.toFormat('yyyy-LL')
-    await SubUsage.create({
-      subscription: subscription._id,
-      period_label: currentPeriod,
-      items_used: 0,
-      trips_used: 0,
-      overage_items: 0,
-      express_orders_used: 0,
-      computed_overage_fee_ngn: 0,
-      on_time_pct: 100
-    })
-
-    res.json({
-      message: 'Payment confirmed. Subscription activated.',
-      subscription
-    })
-  } catch (err) {
     next(err)
   }
 }
@@ -296,6 +218,37 @@ export const getCurrentSubscription = async (req, res, next) => {
 
     res.json({ subscription })
   } catch (err) {
+    next(err)
+  }
+}
+
+export const cancelAutoPayment = async (req, res, next) => {
+  try {
+    const { subscriptionId } = req.params
+
+    const subscription = await Subscription.findById(subscriptionId)
+    if (!subscription) {
+      return res.status(404).json({ message: 'Subscription not found' })
+    }
+
+    const mandateRef = subscription.paymentPlan?.authorizationRef
+    if (!mandateRef) {
+      return res.status(400).json({ message: 'No recurring mandate found.' })
+    }
+
+    const response = await cancelMonnifyMandate(mandateRef)
+
+    // 📝 Mark subscription as having auto-payment cancelled
+    subscription.auto_payment_cancelled = true
+    subscription.status = 'AUTO_PAYMENT_CANCELLED'
+    await subscription.save()
+
+    res.json({
+      message: 'Auto-payment cancelled successfully',
+      monnify: response
+    })
+  } catch (err) {
+    console.error(err)
     next(err)
   }
 }

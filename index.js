@@ -6,12 +6,11 @@ dotenv.config();
 import cors from "cors";
 import { connectDB } from "./config/db.js";
 import routes from "./routes/index.js";
+import monnifyWebhook from "./routes/monnifyWebhook.js";
 import { errorHandler } from "./middlewares/erroHandler.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
-import monnifyWebhook from "./routes/monnifyWebhook.js";
-import subscriptionWebhook from "./routes/subscriptionWebhook.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +34,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// Preserve raw body for Monnify signature verification
+app.use(
+  "/api/webhook/monnify",
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString();
+    },
+  })
+);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -50,7 +59,6 @@ app.use(
 // Mount API routes
 app.use("/api", routes);
 app.use("/api", monnifyWebhook);
-app.use("/api", subscriptionWebhook);
 
 // Health check
 app.get("/", (req, res) => res.json({ ok: true }));

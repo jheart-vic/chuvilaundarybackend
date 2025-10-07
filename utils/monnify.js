@@ -54,3 +54,18 @@ export async function initMonnifyPayment ({
 
   return res.data.responseBody
 }
+
+
+// 🚫 Cancel recurring auto-payment (mandate)
+export async function cancelMonnifyMandate (mandateReference) {
+  const token = await getAuthToken()
+
+  const res = await axios.delete(
+    `${MONNIFY_BASE_URL}/v1/recurring/mandates/${mandateReference}`,
+    {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  )
+
+  return res.data
+}
