@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
-  createOrder,  listUserOrders,
+  createOrder,
+  listUserOrders,
   cancelOrderUser
 } from "../controllers/orderController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
@@ -10,9 +11,15 @@ import { createOrderSchema } from "../utils/validator.js";
 
 const router = Router();
 
-// create order (authenticated)
+// 📝 Create a new order (authenticated)
 router.post("/", requireAuth, upload.array("photos", 5), validateBody(createOrderSchema), createOrder);
-router.get("/:phone", requireAuth, listUserOrders)
-router.post("/:id/cancel", requireAuth, cancelOrderUser);
+
+// 📄 List all orders for a user by phone number
+router.get("/user/:phone", requireAuth, listUserOrders); // 👈 made route more descriptive
+
+// ❌ Cancel an order by orderId
+router.post("/:orderId/cancel", requireAuth, cancelOrderUser); // 👈 renamed :id → :orderId
+
+router.get("/track/:orderId", trackOrderPublic); // 👈 Public tracking endpoint
 
 export default router;

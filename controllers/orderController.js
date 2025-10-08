@@ -15,6 +15,13 @@ import { initMonnifyPayment } from '../utils/monnify.js'
 const generateDeliveryPin = () =>
   Math.floor(1000 + Math.random() * 9000).toString()
 
+
+// ✅ Utility: Generate Custom Order ID
+function generateOrderId(docId) {
+  const randomPart = docId.toString().slice(-6).toUpperCase(); // last 6 chars of ObjectID
+  return `CHUVI-ORD-${randomPart}`;
+}
+
 /**
  * Create order (supports retail and subscription)
  */
@@ -28,6 +35,10 @@ export const createOrder = async (req, res, next) => {
     if (!payload.delivery?.address) return res.status(400).json({ message: 'Delivery address required' })
 
     const deliveryPin = generateDeliveryPin()
+    // ✅ Generate ObjectId before saving
+    const tempId = new mongoose.Types.ObjectId();
+    const orderId = generateOrderId(tempId);
+
 
     // --- Photos upload
     const photos = []
@@ -139,7 +150,7 @@ export const createOrder = async (req, res, next) => {
         customerName: payload.userName || 'Customer',
         customerEmail: user?.email || 'noemail@example.com',
         customerPhone: userPhone,
-        orderId: `ORD-${Date.now()}`,
+        orderId,
         paymentMethod: paymentInput.method === 'CARD' ? 'CARD' : 'ACCOUNT_TRANSFER'
       })
       paymentData.transactionId = paymentInitResponse?.transactionReference
@@ -160,6 +171,7 @@ export const createOrder = async (req, res, next) => {
 
     // --- Create order
     const order = await Order.create({
+      _id: tempId,
       userPhone,
       userName: payload.userName,
       items: payload.items,
@@ -178,6 +190,7 @@ export const createOrder = async (req, res, next) => {
       expectedReadyAt,
       express: hasExpress,
       sameDay: hasSameDay,
+      orderId,
       payment: paymentData,
       deliveryPin
     })
@@ -195,6 +208,8 @@ export const createOrder = async (req, res, next) => {
         await coupon.save()
       }
     }
+
+
 
     // --- Notifications
     await notifyOrderEvent({
@@ -226,21 +241,22 @@ export const createOrder = async (req, res, next) => {
 
 export const getOrder = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id)
-    if (!order) return res.status(404).json({ message: 'order not found' })
+    const order = await Order.findOne({ orderId: req.params.id }); // 👈 switched to orderId
+    if (!order) return res.status(404).json({ message: 'order not found' });
 
-    let orderData = order.toObject()
+    let orderData = order.toObject();
 
     // 🚫 Hide deliveryPin for normal users
     if (req.user?.role === 'user') {
-      delete orderData.deliveryPin
+      delete orderData.deliveryPin;
     }
 
-    res.json(orderData)
+    res.json(orderData);
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
+
 
 export const listUserOrders = async (req, res, next) => {
   try {
@@ -273,59 +289,100 @@ export const listUserOrders = async (req, res, next) => {
 
 export const updateOrderStatus = async (req, res, next) => {
   try {
-    const { status, note } = req.body
-    if (!Statuses.includes(status))
-      return res.status(400).json({ message: 'invalid status' })
+    const { status, note } = req.body;
+    if (!Statuses.includes(status)) {
+      return res.status(400).json({ message: 'invalid status' });
+    }
 
-    const order = await Order.findById(req.params.id).populate('user')
-    if (!order) return res.status(404).json({ message: 'order not found' })
+    const order = await Order.findOne({ orderId: req.params.id }).populate('user');
+    if (!order) return res.status(404).json({ message: 'order not found' });
 
-    order.status = status
-    order.history.push({ status, note })
-    await order.save()
+    order.status = status;
+    order.history.push({ status, note });
+    await order.save();
 
     // 🔔 Notify user with mapped template
     await notifyOrderEvent({
       user: order.user,
       order,
       type: 'statusUpdate'
-    })
+    });
 
-    res.json(order)
+    res.json(order);
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
 
 export const cancelOrderUser = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id).populate('user')
-    if (!order) return res.status(404).json({ message: 'order not found' })
+    const order = await Order.findOne({ orderId: req.params.id }).populate('user'); // 👈 switched
+    if (!order) return res.status(404).json({ message: 'order not found' });
 
-    // Ensure user owns this order
     if (order.user._id.toString() !== req.user._id.toString()) {
       return res
         .status(403)
-        .json({ message: 'You can only cancel your own orders' })
+        .json({ message: 'You can only cancel your own orders' });
     }
 
-    order.status = 'Cancelled'
+    order.status = 'Cancelled';
     order.history.push({
       status: 'Cancelled',
       note: req.body.note || 'Cancelled by user'
-    })
+    });
 
-    await order.save()
+    await order.save();
 
-    // 🔔 Notify
     await notifyOrderEvent({
       user: order.user,
       order,
       type: 'cancelled_user'
-    })
+    });
 
-    res.json(order)
+    res.json(order);
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
+
+export const trackOrderPublic = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await Order.findOne({ orderId });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // 🧼 Extract fields
+    const {
+      orderId: id,
+      status,
+      serviceTier,
+      totals,
+      createdAt,
+      updatedAt
+    } = order;
+
+    // 🧠 Format totals to make them clear for frontend display
+    const totalSummary = {
+      subtotal: totals?.subtotal ?? 0,
+      deliveryFee: totals?.delivery ?? 0,
+      discount: totals?.discount ?? 0,
+      total: totals?.grandTotal ?? 0
+    };
+
+    // ✨ Clean, sorted response object
+    res.json({
+      orderId: id,
+      status,
+      tier: serviceTier,             // 👈 renamed for shorter label on frontend
+      totals: totalSummary,
+      createdAt: createdAt.toISOString(),
+      updatedAt: updatedAt.toISOString()
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

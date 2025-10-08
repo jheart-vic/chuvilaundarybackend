@@ -59,6 +59,12 @@ const PaymentPlanSchema = new mongoose.Schema(
 const OrderSchema = new mongoose.Schema(
   {
     userPhone: { type: String, required: true },
+    orderId: {
+      type: String,
+      required: false,
+      unique: true,
+      index: true
+    },
     userName: String,
     items: [OrderItemSchema],
     notes: String,
