@@ -2,7 +2,8 @@ import { Router } from "express";
 import {
   createOrder,
   listUserOrders,
-  cancelOrderUser
+  cancelOrderUser,
+  trackOrderPublic
 } from "../controllers/orderController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
 import { upload } from "../middlewares/uploadMiddleware.js";
