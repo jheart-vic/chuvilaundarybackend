@@ -31,30 +31,34 @@ export async function initMonnifyPayment ({
 }) {
   const token = await getAuthToken()
 
-  const payload = {
-    amount,
-    customerName,
-    customerEmail,
-    customerPhoneNumber: customerPhone,
-    paymentReference: orderId,
-    paymentDescription: `Order Payment - ${orderId}`,
-    currencyCode: 'NGN',
-    contractCode: CONTRACT_CODE,
-    redirectUrl: process.env.MONNIFY_REDIRECT_URL,
-    paymentMethods: [paymentMethod]
-  }
-
-  const res = await axios.post(
-    `${MONNIFY_BASE_URL}/v1/merchant/transactions/init-transaction`,
-    payload,
-    {
-      headers: { Authorization: `Bearer ${token}` }
+  try {
+    const payload = {
+      amount,
+      customerName,
+      customerEmail,
+      customerPhoneNumber: customerPhone,
+      paymentReference: orderId,
+      paymentDescription: `Order Payment - ${orderId}`,
+      currencyCode: 'NGN',
+      contractCode: CONTRACT_CODE,
+      redirectUrl: process.env.MONNIFY_REDIRECT_URL,
+      paymentMethods: [paymentMethod]
     }
-  )
 
-  return res.data.responseBody
+    const res = await axios.post(
+      `${MONNIFY_BASE_URL}/v1/merchant/transactions/init-transaction`,
+      payload,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+
+    return res.data.responseBody
+  } catch (error) {
+    console.error('Monnify init failed:', error.response?.data || error.message)
+    throw new Error('Failed to initialize Monnify payment')
+  }
 }
-
 
 // 🚫 Cancel recurring auto-payment (mandate)
 export async function cancelMonnifyMandate (mandateReference) {

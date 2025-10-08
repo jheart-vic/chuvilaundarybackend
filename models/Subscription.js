@@ -1,48 +1,6 @@
 import mongoose from "mongoose";
+import PaymentPlanSchema from "./Payment.js";
 
-// ✅ Payment plan subdocument (Monnify-ready)
-const PaymentPlanSchema = new mongoose.Schema(
-  {
-    method: {
-      type: String,
-      enum: ["CARD", "WALLET", "BANK_TRANSFER"],
-      required: true,
-    },
-    mode: {
-      type: String,
-      enum: ["FULL", "INSTALLMENT"],
-      default: "FULL",
-    },
-    gateway: {
-      type: String,
-      enum: ["MONNIFY"],
-      default: "MONNIFY",
-      required: true,
-    },
-    authorizationRef: String, // Monnify token for auto-renewal (recurring debit mandate)
-    lastTransactionId: String, // Monnify transaction reference for last payment
-    amountPaid: { type: Number, default: 0 },
-    balance: { type: Number, default: 0 },
-    installments: [
-      {
-        dueDate: Date,
-        amount: Number,
-        status: {
-          type: String,
-          enum: ["PENDING", "PAID", "FAILED"],
-          default: "PENDING",
-        },
-      },
-    ],
-    nextBillingDate: { type: Date },
-    lastBillingAttempt: { type: Date },
-    failedAttempts: { type: Number, default: 0 },
-    currency: { type: String, enum: ["NGN"], default: "NGN" },
-  },
-  { _id: false }
-);
-
-// ✅ Subscription schema
 const subscriptionSchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -51,25 +9,35 @@ const subscriptionSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["ACTIVE", "PAUSED", "CANCEL_AT_PERIOD_END", "CANCELLED", "PENDING", "FAILED", "AUTO_PAYMENT_CANCELLED"],
+      enum: [
+        "ACTIVE",
+        "PAUSED",
+        "CANCEL_AT_PERIOD_END",
+        "CANCELLED",
+        "PENDING",
+        "FAILED",
+        "AUTO_PAYMENT_CANCELLED",
+      ],
       default: "PENDING",
     },
 
-    paymentPlan: PaymentPlanSchema,
+    // ✅ Unified payment schema (Paystack + Monnify)
+    payment: PaymentPlanSchema,
+
     start_date: { type: Date, default: Date.now },
     period_start: { type: Date, required: true },
     period_end: { type: Date, required: true },
     renewal_date: { type: Date, required: true },
     ended_at: { type: Date },
     renewal_count: { type: Number, default: 0 },
-    monnifyPaymentReference: { type: String }, // For recurring payments (mandates)
-    auto_payment_cancelled: { type: Boolean, default: false },
+
     usage: [{ type: mongoose.Schema.Types.ObjectId, ref: "SubUsage" }],
 
     rollover_cap_pct: { type: Number, default: 25 },
     rollover_balance: { type: Number, default: 0 },
     pause_count_qtr: { type: Number, default: 0 },
     canceled_reason: { type: String },
+
     delivery_zone_status: {
       type: String,
       enum: ["INSIDE", "OUTSIDE"],

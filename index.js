@@ -7,6 +7,7 @@ import cors from "cors";
 import { connectDB } from "./config/db.js";
 import routes from "./routes/index.js";
 import monnifyWebhook from "./routes/monnifyWebhook.js";
+import payStackWebhook from "./routes/payStackWebhook.js";
 import { errorHandler } from "./middlewares/erroHandler.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -43,6 +44,14 @@ app.use(
     },
   })
 );
+app.use(
+  "/api/webhook/paystack",
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString();
+    },
+  })
+);
 
 // Middleware
 app.use(cors());
@@ -59,6 +68,7 @@ app.use(
 // Mount API routes
 app.use("/api", routes);
 app.use("/api", monnifyWebhook);
+app.use("/api", payStackWebhook);
 
 // Health check
 app.get("/", (req, res) => res.json({ ok: true }));

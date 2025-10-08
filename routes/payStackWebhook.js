@@ -11,89 +11,80 @@ dotenv.config();
 const router = express.Router();
 
 /**
- * ✅ Verify Monnify webhook signature using raw body
+ * ✅ Verify Paystack webhook signature
  */
-function verifySignature(req) {
+function verifyPaystackSignature(req) {
   try {
-    const secret = process.env.MONNIFY_SECRET_KEY;
-    const signature = req.headers["monnify-signature"];
-
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    const signature = req.headers["x-paystack-signature"];
     if (!signature || !secret) return false;
 
-    const computedSignature = crypto
+    const computed = crypto
       .createHmac("sha512", secret)
-      .update(req.rawBody) // ✅ Use raw body captured by express.json verify()
+      .update(JSON.stringify(req.body))
       .digest("hex");
 
-    return signature === computedSignature;
+    return computed === signature;
   } catch (err) {
-    console.error("❌ Signature verification error:", err);
+    console.error("❌ Paystack signature verification error:", err);
     return false;
   }
 }
 
 /**
- * ✅ Unified webhook handler for:
- * - Order payments
- * - Subscription one-time payments
- * - Subscription recurring payments
+ * ✅ Paystack Webhook
+ * Handles:
+ * - Successful one-time order payments
+ * - Subscription activations or renewals
  */
-router.post("/webhook/monnify", async (req, res) => {
+router.post("/webhook/paystack", async (req, res) => {
   try {
-    const payload = req.body;
-    console.log("🔔 Monnify Webhook Received:", {
-      eventType: payload?.eventType,
-      reference: payload?.eventData?.transactionReference,
+    const event = req.body;
+    console.log("🔔 Paystack Webhook Received:", {
+      event: event?.event,
+      reference: event?.data?.reference,
     });
 
-    // === Validate payload ===
-    if (!payload?.eventType || !payload?.eventData) {
-      return res.status(400).json({ message: "Invalid webhook payload" });
-    }
-
-    // === Verify Monnify signature ===
-    if (!verifySignature(req)) {
-      console.warn("⚠️ Invalid Monnify signature detected");
+    if (!verifyPaystackSignature(req)) {
+      console.warn("⚠️ Invalid Paystack signature detected");
       return res.status(401).json({ message: "Invalid signature" });
     }
 
-    const { eventType, eventData } = payload;
-    const {
-      paymentReference,
-      transactionReference,
-      paymentStatus,
-      paidAmount,
-    } = eventData;
+    const data = event.data;
+    const successEvents = ["charge.success", "subscription.create", "invoice.create"];
+    const success = successEvents.includes(event.event);
 
-    const success = ["PAID", "SUCCESS"].includes(paymentStatus);
+    const reference = data.reference || data.subscription_code;
+    const amount = data.amount / 100; // Convert from kobo to NGN
 
-    // === 🧠 Idempotency check for Orders ===
+    // === 🧠 Idempotency for Orders ===
     const existingOrder = await Order.findOne({
-      "payment.transactionId": transactionReference,
+      "payment.transactionId": reference,
       "payment.status": "PAID",
     });
 
     if (existingOrder) {
-      console.log("♻️ Duplicate webhook ignored for Order:", existingOrder._id);
+      console.log("♻️ Duplicate Paystack webhook ignored for Order:", existingOrder._id);
       return res.status(200).json({ message: "Order already processed" });
     }
 
-    // === 1️⃣ Handle ORDER payments ===
+    // === 1️⃣ Handle ORDER Payments ===
     const order = await Order.findOne({
-      "payment.transactionId": transactionReference,
+      "payment.transactionId": reference,
     }).populate("user");
 
     if (order) {
-      console.log(`📦 Processing Order payment for ID: ${order._id}`);
+      console.log(`📦 Processing Paystack Order: ${order._id}`);
 
-      order.payment.amountPaid = success ? paidAmount : 0;
+      order.payment.amountPaid = success ? amount : 0;
       order.payment.balance = success ? 0 : order.payment.balance;
       order.payment.status = success ? "PAID" : "FAILED";
-      order.payment.paymentReference = paymentReference;
-
-      const statusNote = success ? "Payment successful" : "Payment failed";
+      order.payment.paymentReference = reference;
       order.status = success ? "Confirmed" : "Pending";
-      order.history.push({ status: order.status, note: statusNote });
+      order.history.push({
+        status: order.status,
+        note: success ? "Payment successful" : "Payment failed",
+      });
 
       await order.save();
 
@@ -101,51 +92,46 @@ router.post("/webhook/monnify", async (req, res) => {
         user: order.user,
         order,
         type: success ? "orderDelivered" : "payment_failed",
-        extra: success
-          ? { amount: order.payment.amountPaid, method: order.payment.method }
-          : undefined,
       });
 
       console.log(
         success
-          ? `✅ Order payment confirmed: ${order._id}`
-          : `❌ Order payment failed: ${order._id}`
+          ? `✅ Paystack order confirmed: ${order._id}`
+          : `❌ Paystack order failed: ${order._id}`
       );
 
       return res.status(200).json({ message: "Order webhook processed" });
     }
 
-    // === 🧠 Idempotency check for Subscriptions ===
+    // === 🧠 Idempotency for Subscriptions ===
     const existingSub = await Subscription.findOne({
-      "paymentPlan.lastTransactionId": transactionReference,
+      "paymentPlan.lastTransactionId": reference,
     });
     if (existingSub) {
-      console.log("♻️ Duplicate webhook ignored for Subscription:", existingSub._id);
+      console.log("♻️ Duplicate Paystack webhook ignored for Subscription:", existingSub._id);
       return res.status(200).json({ message: "Subscription already processed" });
     }
 
-    // === 2️⃣ Handle SUBSCRIPTION payments (One-time or recurring) ===
+    // === 2️⃣ Handle Subscription Payments (Initial or Recurring) ===
     const subscription = await Subscription.findOne({
       $or: [
-        { _id: paymentReference }, // one-time or manual reference
-        { monnifyPaymentReference: paymentReference }, // recurring
+        { "paymentPlan.transactionId": reference },
+        { "paymentPlan.subscriptionCode": data.subscription_code },
       ],
     }).populate("plan");
 
     if (subscription) {
-      console.log(`💳 Processing Subscription payment: ${subscription._id}`);
+      console.log(`💳 Processing Paystack Subscription: ${subscription._id}`);
 
       const now = DateTime.now().setZone("Africa/Lagos");
 
       if (success) {
-        subscription.paymentPlan.lastTransactionId = transactionReference;
-        subscription.paymentPlan.amountPaid += paidAmount;
+        subscription.paymentPlan.lastTransactionId = reference;
+        subscription.paymentPlan.amountPaid += amount;
         subscription.paymentPlan.balance = 0;
         subscription.paymentPlan.failedAttempts = 0;
-
         subscription.status = "ACTIVE";
 
-        // For recurring: just extend the next period
         const newPeriodStart = subscription.period_end
           ? DateTime.fromJSDate(subscription.period_end)
           : now;
@@ -158,7 +144,6 @@ router.post("/webhook/monnify", async (req, res) => {
 
         await subscription.save();
 
-        // Create/update monthly usage record
         const periodLabel = now.toFormat("yyyy-LL");
         await SubUsage.findOneAndUpdate(
           { subscription: subscription._id, period_label: periodLabel },
@@ -177,7 +162,7 @@ router.post("/webhook/monnify", async (req, res) => {
           { upsert: true, new: true }
         );
 
-        console.log(`✅ Subscription active or renewed: ${subscription._id}`);
+        console.log(`✅ Subscription activated or renewed: ${subscription._id}`);
       } else {
         subscription.paymentPlan.failedAttempts += 1;
         if (subscription.paymentPlan.failedAttempts >= 3) {
@@ -191,15 +176,10 @@ router.post("/webhook/monnify", async (req, res) => {
       return res.status(200).json({ message: "Subscription webhook processed" });
     }
 
-    // === Nothing matched ===
-    console.warn("⚠️ No matching Order or Subscription found for webhook:", {
-      paymentReference,
-      transactionReference,
-    });
+    console.warn("⚠️ No matching record found for Paystack webhook:", reference);
     return res.status(404).json({ message: "No matching record found" });
-
   } catch (err) {
-    console.error("❌ Monnify Webhook Error:", err);
+    console.error("❌ Paystack Webhook Error:", err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });

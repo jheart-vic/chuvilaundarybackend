@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import PaymentPlanSchema from './Payment.js'
 
 const OrderItemSchema = new mongoose.Schema(
   {
@@ -24,37 +25,6 @@ export const Statuses = [
   'Delivered',
   'Cancelled'
 ]
-
-// 🔑 Payment schema aligned for one-off retail/subscription orders
-const PaymentPlanSchema = new mongoose.Schema(
-  {
-    method: {
-      type: String,
-      enum: ['CARD', 'BANK_TRANSFER', 'WALLET', 'SUBSCRIPTION'],
-      required: true
-    },
-    mode: {
-      type: String,
-      enum: ['FULL', 'INSTALLMENT'],
-      default: 'FULL'
-    },
-    transactionId: String, // For CARD / BANK_TRANSFER
-    amountPaid: { type: Number, default: 0 },
-    balance: { type: Number, default: 0 },
-    installments: [
-      {
-        dueDate: Date,
-        amount: Number,
-        status: {
-          type: String,
-          enum: ['PENDING', 'PAID', 'FAILED'],
-          default: 'PENDING'
-        }
-      }
-    ]
-  },
-  { _id: false }
-)
 
 const OrderSchema = new mongoose.Schema(
   {

@@ -4,6 +4,7 @@ import SubscriptionPlan from '../models/SubscriptionPlan.js'
 import SubUsage from '../models/SubUsage.js'
 import { DateTime } from 'luxon'
 import { initMonnifyPayment, cancelMonnifyMandate } from '../utils/monnify.js'
+import { cancelPaystackSubscription, initPaystackPayment } from '../utils/paystack.js'
 
 /**
  *  - Creates a PENDING subscription
@@ -53,22 +54,46 @@ export const subscribe = async (req, res, next) => {
       renewal_date: now.plus({ months: 1 }).toJSDate()
     })
 
-    // 💳 Generate Monnify payment link
-    const monnifyResponse = await initMonnifyPayment({
-      amount: plan.price_ngn,
-      customerName: req.user.name,
-      customerEmail: req.user.email,
-      customerPhone: req.user.phone,
-      orderId: subscription._id.toString(),
-      paymentMethod: 'CARD'
-    })
+    let paymentInitResponse
 
-    const paymentLink = monnifyResponse.checkoutUrl
+    if (req.body.gateway === 'PAYSTACK') {
+      paymentInitResponse = await initPaystackPayment({
+        amount: plan.price_ngn,
+        email: req.user.email,
+        name: req.user.name,
+        phone: req.user.phone,
+        orderId: subscription._id.toString()
+      })
+    } else {
+      paymentInitResponse = await initMonnifyPayment({
+        amount: plan.price_ngn,
+        customerName: req.user.name,
+        customerEmail: req.user.email,
+        customerPhone: req.user.phone,
+        orderId: subscription._id.toString(),
+        paymentMethod: 'CARD'
+      })
+    }
+    // ✅ Save payment plan under unified schema
+    subscription.payment = {
+      method: 'CARD',
+      gateway: req.body.gateway || 'MONNIFY',
+      transactionId:
+        paymentInitResponse?.reference ||
+        paymentInitResponse?.transactionReference,
+      checkoutUrl:
+        paymentInitResponse?.checkoutUrl ||
+        paymentInitResponse?.authorization_url,
+      amountPaid: 0,
+      balance: plan.price_ngn
+    }
+
+    await subscription.save()
 
     res.status(201).json({
       message: 'Subscription created. Proceed to payment.',
       subscription,
-      paymentLink
+      paymentLink: subscription.payment.checkoutUrl
     })
   } catch (err) {
     console.error('Subscribe error:', err)
@@ -222,33 +247,62 @@ export const getCurrentSubscription = async (req, res, next) => {
   }
 }
 
-export const cancelAutoPayment = async (req, res, next) => {
+export const cancelSubscription = async (req, res) => {
   try {
-    const { subscriptionId } = req.params
+     const { subscriptionId } = req.params
+ // subscription ID
+    const subscription = await Subscription.findById(subscriptionId);
 
-    const subscription = await Subscription.findById(subscriptionId)
     if (!subscription) {
-      return res.status(404).json({ message: 'Subscription not found' })
+      return res.status(404).json({ message: "Subscription not found" });
     }
 
-    const mandateRef = subscription.paymentPlan?.authorizationRef
-    if (!mandateRef) {
-      return res.status(400).json({ message: 'No recurring mandate found.' })
+    // Prevent double cancellation
+    if (subscription.status === "CANCELLED") {
+      return res.status(400).json({ message: "Subscription already cancelled" });
     }
 
-    const response = await cancelMonnifyMandate(mandateRef)
+    // 🔁 Identify gateway
+    const gateway = subscription.paymentPlan?.gateway;
 
-    // 📝 Mark subscription as having auto-payment cancelled
-    subscription.auto_payment_cancelled = true
-    subscription.status = 'AUTO_PAYMENT_CANCELLED'
-    await subscription.save()
+    // 🚫 Cancel auto-payment if applicable
+    if (gateway === "MONNIFY") {
+      const mandateRef = subscription.paymentPlan?.monnify?.authorizationRef;
+      if (mandateRef) {
+        await cancelMonnifyMandate(mandateRef);
+      }
+    } else if (gateway === "PAYSTACK") {
+      const subscriptionCode = subscription.paymentPlan?.paystack?.subscriptionCode; // optional
+      const authorizationCode = subscription.paymentPlan?.paystack?.authorizationCode;
 
-    res.json({
-      message: 'Auto-payment cancelled successfully',
-      monnify: response
-    })
+      if (subscriptionCode) {
+        // Case 1: Using Paystack Subscription API
+        await cancelPaystackSubscription(subscriptionCode);
+      } else if (authorizationCode) {
+        // Case 2: Manual recurring via stored authorization
+        subscription.paymentPlan.paystack.authorizationCode = null;
+        subscription.auto_payment_cancelled = true;
+      }
+    }
+
+    // 🧾 Update subscription status
+    subscription.status = "CANCELLED";
+    subscription.auto_payment_cancelled = true;
+    subscription.canceled_reason = req.body.reason || "User cancelled manually";
+    subscription.ended_at = new Date();
+
+    await subscription.save();
+
+    return res.json({
+      success: true,
+      message: "Subscription cancelled successfully",
+      subscription,
+    });
   } catch (err) {
-    console.error(err)
-    next(err)
+    console.error("Cancel subscription error:", err);
+    res.status(500).json({
+      message: "Failed to cancel subscription",
+      error: err.message,
+    });
   }
-}
+};
