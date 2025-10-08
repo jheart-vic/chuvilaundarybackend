@@ -6,7 +6,7 @@ import {
   changePlan,
   rolloverUsage,
   getCurrentSubscription,
-  cancelAutoPayment
+  cancelSubscription,
 } from "../controllers/subscriptionController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
 
@@ -20,6 +20,6 @@ router.post("/resume", requireAuth, resumeSubscription);
 router.post("/change-plan", requireAuth, changePlan);
 router.post("/rollover", requireAuth, rolloverUsage);
 router.get("/current", requireAuth, getCurrentSubscription);
-router.patch("/:subscriptionId/cancel-auto-payment", cancelAutoPayment);
+router.patch("/:subscriptionId/cancel-auto-payment", cancelSubscription);
 
 export default router;
