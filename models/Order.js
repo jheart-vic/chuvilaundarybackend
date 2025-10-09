@@ -35,6 +35,7 @@ const OrderSchema = new mongoose.Schema(
       unique: true,
       index: true
     },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false,},
     userName: String,
     items: [OrderItemSchema],
     notes: String,

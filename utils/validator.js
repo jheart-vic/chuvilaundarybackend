@@ -201,12 +201,13 @@ export const createOrderSchema = Joi.object({
   express: Joi.boolean().optional(),
   sameDay: Joi.boolean().optional(),
 
-  payment: Joi.object({
-    method: Joi.string()
-      .valid("CARD", "BANK_TRANSFER", "CASH", "WALLET", "SUBSCRIPTION")
-      .required(),
-    mode: Joi.string().valid("FULL", "INSTALLMENT").optional(),
-  }).required(),
+payment: Joi.object({
+  method: Joi.string()
+    .valid("CARD", "BANK_TRANSFER", "CASH", "WALLET", "SUBSCRIPTION")
+    .required(),
+  mode: Joi.string().valid("FULL", "INSTALLMENT").optional(),
+  gateway: Joi.string().valid("PAYSTACK", "MONNIFY").required(),
+}).unknown(true).required(),
 
   photos: Joi.array().items(Joi.string().uri()).optional(),
 })

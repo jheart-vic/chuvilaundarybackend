@@ -26,89 +26,346 @@ function generateOrderId (docId) {
 /**
  * Create order (supports retail and subscription)
  */
+// export const createOrder = async (req, res, next) => {
+//   try {
+//     const payload = req.body
+//     const userPhone = req.user?.phone || payload.userPhone
+//     if (!userPhone)
+//       return res.status(400).json({ message: 'userPhone required' })
+//     if (!payload.items?.length)
+//       return res.status(400).json({ message: 'At least one item required' })
+//     if (!payload.pickup?.address)
+//       return res.status(400).json({ message: 'Pickup address required' })
+//     if (!payload.delivery?.address)
+//       return res.status(400).json({ message: 'Delivery address required' })
+
+//     const deliveryPin = generateDeliveryPin()
+//     // ✅ Generate ObjectId before saving
+//     const tempId = new mongoose.Types.ObjectId()
+//     const orderId = generateOrderId(tempId)
+
+//     // --- Photos upload
+//     const photos = []
+//     if (req.files?.length) {
+//       for (const f of req.files) {
+//         const result = await uploadToCloudinary(f.buffer, 'laundry/photos')
+//         photos.push(result.secure_url)
+//       }
+//     }
+
+//     // --- Coupon normalization
+//     const couponCode = payload.couponCode?.trim().toUpperCase() || null
+
+//     // --- Subscription check
+//     let plan = null
+//     let usage = null
+//     const user = await User.findOne({ phone: userPhone }).populate(
+//       'currentSubscription'
+//     )
+//     const subscription = user?.currentSubscription
+
+//     if (subscription?.status === 'ACTIVE') {
+//       plan = await SubscriptionPlan.findOne({
+//         code: subscription.plan_code,
+//         active: true
+//       })
+//       if (plan) {
+//         const periodLabel = DateTime.now().toFormat('yyyy-LL')
+//         usage = await SubUsage.findOneAndUpdate(
+//           { subscription: subscription._id, period_label: periodLabel },
+//           {},
+//           { new: true, upsert: true }
+//         )
+//       }
+//     }
+
+//     // --- Pricing model selection
+//     let pricingModel
+//     if (payload.pricingModel === 'SUBSCRIPTION') {
+//       if (!plan)
+//         return res
+//           .status(400)
+//           .json({ message: 'Active subscription not found' })
+//       pricingModel = 'SUBSCRIPTION'
+//     } else if (plan) {
+//       pricingModel = 'SUBSCRIPTION'
+//     } else {
+//       pricingModel = 'RETAIL'
+//     }
+
+//     // --- Service tier
+//     let serviceTier
+//     let tierOverrideMessage = null
+//     if (pricingModel === 'SUBSCRIPTION') {
+//       if (
+//         payload.serviceTier &&
+//         payload.serviceTier.toUpperCase() !== plan?.tier
+//       ) {
+//         tierOverrideMessage = `serviceTier overridden to ${plan?.tier}`
+//       }
+//       serviceTier = plan?.tier || 'STANDARD'
+//     } else {
+//       serviceTier = payload.serviceTier?.toUpperCase() || 'STANDARD'
+//     }
+
+//     // --- Totals (includes subscription overages if any)
+//     const totals = await computeOrderTotals(
+//       {
+//         ...payload,
+//         couponCode,
+//         pricingModel,
+//         subscriptionPlanCode: plan?.code,
+//         userPhone,
+//         serviceTier
+//       },
+//       { plan, usage }
+//     )
+
+//     // --- SLA / Ready time
+//     const hasExpress = payload.items.some(i => i.express)
+//     const hasSameDay = Boolean(payload.sameDay)
+//     if (hasSameDay) {
+//       const totalItems = payload.items.reduce(
+//         (s, i) => s + (i.quantity || 1),
+//         0
+//       )
+//       if (totalItems > 15) {
+//         return res
+//           .status(400)
+//           .json({ message: 'Same-day orders limited to 15 items max' })
+//       }
+//     }
+//     const expectedReadyAt = computeExpectedReadyAt(
+//       new Date(payload.pickup.date),
+//       serviceTier,
+//       { express: hasExpress, sameDay: hasSameDay }
+//     )
+//     const slaHours = Math.round(
+//       (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
+//     )
+
+//     // --- Payment info
+//     const paymentInput = payload.payment || {}
+//     if (!paymentInput.method)
+//       return res.status(400).json({ message: 'Payment method required' })
+
+//     let paymentData = {
+//       method: paymentInput.method,
+//       mode: paymentInput.mode || 'FULL',
+//       amountPaid: 0,
+//       balance: totals.grandTotal,
+//       installments: []
+//     }
+
+//     let paymentInitResponse = null
+
+//     if (
+//       ['CARD', 'BANK_TRANSFER'].includes(paymentInput.method) &&
+//       (pricingModel === 'RETAIL' ||
+//         (pricingModel === 'SUBSCRIPTION' && totals.grandTotal > 0))
+//     ) {
+//       if (paymentInput.gateway === 'PAYSTACK') {
+//         paymentInitResponse = await initPaystackPayment({
+//           amount: totals.grandTotal,
+//           email: user?.email,
+//           name: payload.userName || 'Customer',
+//           phone: userPhone,
+//           orderId
+//         })
+//       } else {
+//         paymentInitResponse = await initMonnifyPayment({
+//           amount: totals.grandTotal,
+//           customerName: payload.userName || user?.fullName || 'Customer',
+//           customerEmail: user?.email ,
+//           customerPhone: userPhone,
+//           orderId,
+//           paymentMethod:
+//             paymentInput.method === 'CARD' ? 'CARD' : 'ACCOUNT_TRANSFER'
+//         })
+//       }
+
+//       paymentData = {
+//         ...paymentData,
+//         gateway: paymentInput.gateway ,
+//         transactionId:
+//           paymentInitResponse?.reference ||
+//           paymentInitResponse?.transactionReference,
+//         checkoutUrl:
+//           paymentInitResponse?.checkoutUrl ||
+//           paymentInitResponse?.authorization_url
+//       }
+//     }
+
+//     if (!paymentData.gateway) {
+//       return res.status(400).json({ message: "Payment gateway is required" });
+//     }
+
+//     // --- Installments validation
+//     if (paymentInput.mode === 'INSTALLMENT' && paymentInput.installments) {
+//       paymentData.installments = paymentInput.installments.map(i => ({
+//         dueDate: i.dueDate,
+//         amount: i.amount,
+//         status: 'PENDING'
+//       }))
+//       const totalInstallments = paymentData.installments.reduce(
+//         (s, i) => s + i.amount,
+//         0
+//       )
+//       if (totalInstallments !== totals.grandTotal) {
+//         return res
+//           .status(400)
+//           .json({ message: 'Installment amounts must equal grand total' })
+//       }
+//     }
+//       console.log(">>> Payment Gateway Requested:", paymentInput.gateway)
+//       console.log(">>> Using Init Function:", paymentInput.gateway === "PAYSTACK" ? "Paystack" : "Monnify")
+
+// console.log(user.email)
+
+//     // --- Create order
+//     const order = await Order.create({
+//       _id: tempId,
+//       userPhone,
+//       user: req.user?._id || null,
+//       userName: payload.userName,
+//       items: payload.items,
+//       notes: payload.notes,
+//       photos,
+//       couponCode,
+//       totals,
+//       pickup: payload.pickup,
+//       delivery: payload.delivery,
+//       status: 'Booked',
+//       history: [{ status: 'Booked', note: 'Order created' }],
+//       subscriptionPlanCode: plan?.code || null,
+//       pricingModel,
+//       serviceTier,
+//       slaHours,
+//       expectedReadyAt,
+//       express: hasExpress,
+//       sameDay: hasSameDay,
+//       orderId,
+//       payment: paymentData,
+//       deliveryPin
+//     })
+
+//     // --- Coupon usage increment
+//     if (couponCode) {
+//       const coupon = await Coupon.findOne({ code: couponCode })
+//       if (coupon) {
+//         coupon.uses += 1
+//         coupon.redemptions.push({
+//           userPhone,
+//           orderId: order._id,
+//           redeemedAt: DateTime.now().setZone('Africa/Lagos').toJSDate()
+//         })
+//         await coupon.save()
+//       }
+//     }
+
+//     // --- Notifications
+//     await notifyOrderEvent({
+//       user: req.user,
+//       order,
+//       type: 'orderCreated',
+//       meta: { deliveryPin }
+//     })
+//     const admins = await User.find({ role: 'admin' })
+//     for (const admin of admins) {
+//       await notifyOrderEvent({
+//         user: admin,
+//         order,
+//         type: 'orderCreatedForAdmin',
+//         meta: { deliveryPin }
+//       })
+//     }
+
+//     res.status(201).json({
+//       order,
+//       paymentInitResponse, // Monnify link/account if needed
+//       ...(tierOverrideMessage && { message: tierOverrideMessage })
+//     })
+//   } catch (err) {
+//     console.error('Create order failed:', err)
+//     next(err)
+//   }
+// }
+
 export const createOrder = async (req, res, next) => {
   try {
-    const payload = req.body
-    const userPhone = req.user?.phone || payload.userPhone
-    if (!userPhone)
-      return res.status(400).json({ message: 'userPhone required' })
+    const payload = req.body;
+
+    // 🧩 1. Fetch logged-in user
+    const user = await User.findById(req.user._id).populate("currentSubscription");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const userPhone = user.phone;
+    if (!userPhone) return res.status(400).json({ message: "User phone required" });
+    if (!user.email)
+      return res.status(400).json({ message: "User email required for payment" });
+
+    // 🧾 2. Basic payload validations
     if (!payload.items?.length)
-      return res.status(400).json({ message: 'At least one item required' })
+      return res.status(400).json({ message: "At least one item required" });
     if (!payload.pickup?.address)
-      return res.status(400).json({ message: 'Pickup address required' })
+      return res.status(400).json({ message: "Pickup address required" });
     if (!payload.delivery?.address)
-      return res.status(400).json({ message: 'Delivery address required' })
+      return res.status(400).json({ message: "Delivery address required" });
 
-    const deliveryPin = generateDeliveryPin()
-    // ✅ Generate ObjectId before saving
-    const tempId = new mongoose.Types.ObjectId()
-    const orderId = generateOrderId(tempId)
+    // 🎯 Generate delivery pin and orderId early
+    const deliveryPin = generateDeliveryPin();
+    const tempId = new mongoose.Types.ObjectId();
+    const orderId = generateOrderId(tempId);
 
-    // --- Photos upload
-    const photos = []
+    // 🖼️ 3. Handle photo uploads (if any)
+    const photos = [];
     if (req.files?.length) {
       for (const f of req.files) {
-        const result = await uploadToCloudinary(f.buffer, 'laundry/photos')
-        photos.push(result.secure_url)
+        const result = await uploadToCloudinary(f.buffer, "laundry/photos");
+        photos.push(result.secure_url);
       }
     }
 
-    // --- Coupon normalization
-    const couponCode = payload.couponCode?.trim().toUpperCase() || null
+    // 🧾 4. Handle coupons
+    const couponCode = payload.couponCode?.trim().toUpperCase() || null;
 
-    // --- Subscription check
-    let plan = null
-    let usage = null
-    const user = await User.findOne({ phone: userPhone }).populate(
-      'currentSubscription'
-    )
-    const subscription = user?.currentSubscription
+    // 📦 5. Subscription check
+    const subscription = user.currentSubscription;
+    let plan = null;
+    let usage = null;
 
-    if (subscription?.status === 'ACTIVE') {
+    if (subscription?.status === "ACTIVE") {
       plan = await SubscriptionPlan.findOne({
         code: subscription.plan_code,
-        active: true
-      })
+        active: true,
+      });
+
       if (plan) {
-        const periodLabel = DateTime.now().toFormat('yyyy-LL')
+        const periodLabel = DateTime.now().toFormat("yyyy-LL");
         usage = await SubUsage.findOneAndUpdate(
           { subscription: subscription._id, period_label: periodLabel },
           {},
           { new: true, upsert: true }
-        )
+        );
       }
     }
 
-    // --- Pricing model selection
-    let pricingModel
-    if (payload.pricingModel === 'SUBSCRIPTION') {
-      if (!plan)
-        return res
-          .status(400)
-          .json({ message: 'Active subscription not found' })
-      pricingModel = 'SUBSCRIPTION'
-    } else if (plan) {
-      pricingModel = 'SUBSCRIPTION'
-    } else {
-      pricingModel = 'RETAIL'
-    }
+    // ⚖️ 6. Determine pricing model and tier
+    const isSubscription = payload.pricingModel === "SUBSCRIPTION" || !!plan;
+    const pricingModel = isSubscription ? "SUBSCRIPTION" : "RETAIL";
 
-    // --- Service tier
-    let serviceTier
-    let tierOverrideMessage = null
-    if (pricingModel === 'SUBSCRIPTION') {
-      if (
-        payload.serviceTier &&
-        payload.serviceTier.toUpperCase() !== plan?.tier
-      ) {
-        tierOverrideMessage = `serviceTier overridden to ${plan?.tier}`
+    let serviceTier = "STANDARD";
+    let tierOverrideMessage = null;
+    if (isSubscription) {
+      if (payload.serviceTier && payload.serviceTier.toUpperCase() !== plan?.tier) {
+        tierOverrideMessage = `Service tier overridden to ${plan?.tier}`;
       }
-      serviceTier = plan?.tier || 'STANDARD'
+      serviceTier = plan?.tier || "STANDARD";
     } else {
-      serviceTier = payload.serviceTier?.toUpperCase() || 'STANDARD'
+      serviceTier = payload.serviceTier?.toUpperCase() || "STANDARD";
     }
 
-    // --- Totals (includes subscription overages if any)
+    // 💰 7. Compute totals
     const totals = await computeOrderTotals(
       {
         ...payload,
@@ -116,108 +373,119 @@ export const createOrder = async (req, res, next) => {
         pricingModel,
         subscriptionPlanCode: plan?.code,
         userPhone,
-        serviceTier
+        serviceTier,
       },
       { plan, usage }
-    )
+    );
 
-    // --- SLA / Ready time
-    const hasExpress = payload.items.some(i => i.express)
-    const hasSameDay = Boolean(payload.sameDay)
+    // ⏰ 8. Compute SLA & ready time
+    const hasExpress = payload.items.some((i) => i.express);
+    const hasSameDay = Boolean(payload.sameDay);
+
     if (hasSameDay) {
-      const totalItems = payload.items.reduce(
-        (s, i) => s + (i.quantity || 1),
-        0
-      )
+      const totalItems = payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
       if (totalItems > 15) {
         return res
           .status(400)
-          .json({ message: 'Same-day orders limited to 15 items max' })
+          .json({ message: "Same-day orders limited to 15 items max" });
       }
     }
+
     const expectedReadyAt = computeExpectedReadyAt(
       new Date(payload.pickup.date),
       serviceTier,
       { express: hasExpress, sameDay: hasSameDay }
-    )
+    );
     const slaHours = Math.round(
       (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
-    )
+    );
 
-    // --- Payment info
-    const paymentInput = payload.payment || {}
+    // 💳 9. Payment setup
+    const paymentInput = payload.payment || {};
     if (!paymentInput.method)
-      return res.status(400).json({ message: 'Payment method required' })
+      return res.status(400).json({ message: "Payment method required" });
+    if (!paymentInput.gateway)
+      return res.status(400).json({ message: "Payment gateway required" });
 
     let paymentData = {
       method: paymentInput.method,
-      mode: paymentInput.mode || 'FULL',
+      mode: paymentInput.mode || "FULL",
       amountPaid: 0,
       balance: totals.grandTotal,
-      installments: []
-    }
+      installments: [],
+    };
 
-    let paymentInitResponse = null
+    let paymentInitResponse = null;
 
     if (
-      ['CARD', 'BANK_TRANSFER'].includes(paymentInput.method) &&
-      (pricingModel === 'RETAIL' ||
-        (pricingModel === 'SUBSCRIPTION' && totals.grandTotal > 0))
+      ["CARD", "BANK_TRANSFER"].includes(paymentInput.method) &&
+      (pricingModel === "RETAIL" ||
+        (pricingModel === "SUBSCRIPTION" && totals.grandTotal > 0))
     ) {
-      if (paymentInput.gateway === 'PAYSTACK') {
+      console.log(">>> Payment Gateway Requested:", paymentInput.gateway);
+
+      if (paymentInput.gateway === "PAYSTACK") {
+        console.log(">>> Using Init Function: Paystack");
+
         paymentInitResponse = await initPaystackPayment({
           amount: totals.grandTotal,
-          email: user?.email,
-          name: payload.userName || 'Customer',
-          phone: userPhone,
-          orderId
-        })
+          email: user.email,
+          name: payload.userName || user.fullName || "Customer",
+          phone: user.phone,
+          orderId,
+        });
       } else {
+        console.log(">>> Using Init Function: Monnify");
+
         paymentInitResponse = await initMonnifyPayment({
           amount: totals.grandTotal,
-          customerName: payload.userName || 'Customer',
-          customerEmail: user?.email || 'noemail@example.com',
-          customerPhone: userPhone,
+          customerName: payload.userName || user.fullName || "Customer",
+          customerEmail: user.email,
+          customerPhone: user.phone,
           orderId,
           paymentMethod:
-            paymentInput.method === 'CARD' ? 'CARD' : 'ACCOUNT_TRANSFER'
-        })
+            paymentInput.method === "CARD" ? "CARD" : "ACCOUNT_TRANSFER",
+        });
       }
 
       paymentData = {
         ...paymentData,
-        gateway: paymentInput.gateway || 'MONNIFY',
+        gateway: paymentInput.gateway,
         transactionId:
           paymentInitResponse?.reference ||
           paymentInitResponse?.transactionReference,
         checkoutUrl:
           paymentInitResponse?.checkoutUrl ||
-          paymentInitResponse?.authorization_url
-      }
+          paymentInitResponse?.authorization_url,
+      };
     }
-    // --- Installments validation
-    if (paymentInput.mode === 'INSTALLMENT' && paymentInput.installments) {
-      paymentData.installments = paymentInput.installments.map(i => ({
+
+    // 💰 Installment validation (if applicable)
+    if (paymentInput.mode === "INSTALLMENT" && paymentInput.installments) {
+      paymentData.installments = paymentInput.installments.map((i) => ({
         dueDate: i.dueDate,
         amount: i.amount,
-        status: 'PENDING'
-      }))
+        status: "PENDING",
+      }));
+
       const totalInstallments = paymentData.installments.reduce(
         (s, i) => s + i.amount,
         0
-      )
+      );
+
       if (totalInstallments !== totals.grandTotal) {
         return res
           .status(400)
-          .json({ message: 'Installment amounts must equal grand total' })
+          .json({ message: "Installment amounts must equal grand total" });
       }
     }
 
-    // --- Create order
+    // 🧾 10. Create the order
     const order = await Order.create({
       _id: tempId,
+      user: user._id,
       userPhone,
-      userName: payload.userName,
+      userName: payload.userName || user.fullName,
       items: payload.items,
       notes: payload.notes,
       photos,
@@ -225,8 +493,8 @@ export const createOrder = async (req, res, next) => {
       totals,
       pickup: payload.pickup,
       delivery: payload.delivery,
-      status: 'Booked',
-      history: [{ status: 'Booked', note: 'Order created' }],
+      status: "Booked",
+      history: [{ status: "Booked", note: "Order created" }],
       subscriptionPlanCode: plan?.code || null,
       pricingModel,
       serviceTier,
@@ -236,51 +504,52 @@ export const createOrder = async (req, res, next) => {
       sameDay: hasSameDay,
       orderId,
       payment: paymentData,
-      deliveryPin
-    })
+      deliveryPin,
+    });
 
-    // --- Coupon usage increment
+    // 🎟️ 11. Handle coupon increment
     if (couponCode) {
-      const coupon = await Coupon.findOne({ code: couponCode })
+      const coupon = await Coupon.findOne({ code: couponCode });
       if (coupon) {
-        coupon.uses += 1
+        coupon.uses += 1;
         coupon.redemptions.push({
           userPhone,
           orderId: order._id,
-          redeemedAt: DateTime.now().setZone('Africa/Lagos').toJSDate()
-        })
-        await coupon.save()
+          redeemedAt: DateTime.now().setZone("Africa/Lagos").toJSDate(),
+        });
+        await coupon.save();
       }
     }
 
-    // --- Notifications
+    // 🔔 12. Notifications
     await notifyOrderEvent({
-      user: req.user,
+      user,
       order,
-      type: 'orderCreated',
-      meta: { deliveryPin }
-    })
-    const admins = await User.find({ role: 'admin' })
+      type: "orderCreated",
+      meta: { deliveryPin },
+    });
+
+    const admins = await User.find({ role: "admin" });
     for (const admin of admins) {
       await notifyOrderEvent({
         user: admin,
         order,
-        type: 'orderCreatedForAdmin',
-        meta: { deliveryPin }
-      })
+        type: "orderCreatedForAdmin",
+        meta: { deliveryPin },
+      });
     }
 
+    // ✅ 13. Response
     res.status(201).json({
       order,
-      paymentInitResponse, // Monnify link/account if needed
-      ...(tierOverrideMessage && { message: tierOverrideMessage })
-    })
+      paymentInitResponse,
+      ...(tierOverrideMessage && { message: tierOverrideMessage }),
+    });
   } catch (err) {
-    console.error('Create order failed:', err)
-    next(err)
+    console.error("Create order failed:", err);
+    next(err);
   }
-}
-
+};
 export const getOrder = async (req, res, next) => {
   try {
     const order = await Order.findOne({ orderId: req.params.id }) // 👈 switched to orderId
