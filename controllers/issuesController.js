@@ -6,41 +6,42 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 // create, update, get total issues, list issues
-
-export async function createIssue (req, res, next) {
+export async function createIssue(req, res, next) {
   try {
-    const { fullName, phone, order, message }  = req.body
+    const { fullName, phone, order, message } = req.body;
 
     const issue = await Issue.create({
       fullName,
       phone,
       order,
       messages: [{ sender: 'customer', content: message }]
-    })
+    });
+
+    // Re-fetch issue with populated orderId (for response)
+    const populatedIssue = await Issue.findById(issue._id)
+      .populate('order', 'orderId');
 
     await Notification.create({
       user: req.user?._id,
       title: 'New Issue Created',
       message: `Issue reported: ${message}`,
       type: 'system'
-    })
+    });
 
-    // ✅ Notify support (for internal tracking)
-    const supportEmail = process.env.SUPPORT_EMAIL || 'support@yourapp.com'
+    const supportEmail = process.env.SUPPORT_EMAIL || 'support@yourapp.com';
     await sendEmail(
       supportEmail,
       'New Issue Reported',
       `<p>User <strong>${fullName}</strong> (${phone}) reported an issue:</p>
        <p><em>${message}</em></p>
-       ${order ? `<p>Order ID: ${order.orderId}</p>` : ''}`
-    )
+       ${populatedIssue.order ? `<p>Order ID: ${populatedIssue.order.orderId}</p>` : ''}`
+    );
 
-    // ✅ Notify user (using templates)
-    await notifyIssueEvent({ user: req.user, issue, type: 'issue_created' })
+    await notifyIssueEvent({ user: req.user, issue: populatedIssue, type: 'issue_created' });
 
-    return res.status(201).json({ success: true, issue })
+    return res.status(201).json({ success: true, issue: populatedIssue });
   } catch (err) {
-    next(err)
+    next(err);
   }
 }
 
@@ -80,7 +81,6 @@ export async function updateIssue(req, res, next) {
   }
 }
 
-
 export async function getTotalIssues (req, res, next) {
   try {
     const totalIssues = await Issue.countDocuments()
@@ -97,11 +97,15 @@ export async function getTotalIssues (req, res, next) {
   }
 }
 
-export async function listIssues (req, res, next) {
+export async function listIssues(req, res, next) {
   try {
-    const issues = await Issue.find({}).sort({ createdAt: -1 }).limit(200)
-    return res.json({ success: true, issues })
+    const issues = await Issue.find({})
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('order', 'orderId'); // 👈 Only include orderId
+
+    return res.json({ success: true, issues });
   } catch (err) {
-    next(err)
+    next(err);
   }
 }
