@@ -32,7 +32,7 @@ export async function createIssue (req, res, next) {
       'New Issue Reported',
       `<p>User <strong>${fullName}</strong> (${phone}) reported an issue:</p>
        <p><em>${message}</em></p>
-       ${order ? `<p>Order ID: ${order}</p>` : ''}`
+       ${order ? `<p>Order ID: ${order.orderId}</p>` : ''}`
     )
 
     // ✅ Notify user (using templates)

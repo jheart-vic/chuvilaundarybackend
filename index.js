@@ -1,6 +1,7 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
+import helmet from "helmet";
 import dotenv from "dotenv";
 dotenv.config();
 import cors from "cors";
@@ -17,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-
+app.use(helmet());
 // Wrap Express app in HTTP server
 const server = http.createServer(app);
 
