@@ -190,6 +190,7 @@ export const createOrderSchema = Joi.object({
       line1: Joi.string().required(),
       line2: Joi.string().allow("", null).optional(),
       city: Joi.string().required(),
+      lga: Joi.string().optional(),
       state: Joi.string().optional(),
       landmark: Joi.string().optional(),
       zone: Joi.string().optional(),

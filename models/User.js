@@ -5,6 +5,7 @@ const AddressSchema = new mongoose.Schema({
   line1: String,
   line2: String,
   city: String,
+  lga: String,
   state: String,
   zone: String, // for delivery fee zones
   landmark: String

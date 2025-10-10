@@ -76,7 +76,7 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
     pickupReminder: "Reminder: Your laundry pickup is in 1 hour. Please have your items ready. – Chuvilaundry.",
     processing: "Dear {{name}}, your laundry is now being processed. We’ll notify you when it’s ready. – Chuvilaundry.",
     complaintReceived: "Dear {{name}}, we’ve received your complaint and are working on it. Resolution update coming soon. – Chuvilaundry.",
-
+    orderCreatedForAdmin: "New order received. Order ID: {{orderId}}, Pickup: {{window}}. Customer: {{name}}.",
     // ✅ Payment events
     payment_success: "Dear {{name}}, your payment of ₦{{amount}} via {{method}} was successful. Thank you for using Chuvilaundry.",
     payment_failed: "Dear {{name}}, your payment attempt of ₦{{amount}} via {{method}} has failed. Please try again or contact support. hello@chuvilaundry.com",
@@ -110,6 +110,7 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
     window: order?.delivery?.window || order?.pickup?.window || "",
     amount: extra.amount || order?.totals?.grandTotal || "",
     method: extra.method || order?.payment?.method || "",
+    orderId: order?.orderId || "",
     pin: extra.pin || "",
     code: extra.code || "",
     reason: extra.reason || "",
@@ -121,6 +122,7 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
   const message = template.replace(/{{(.*?)}}/g, (_, key) => context[key.trim()] || "");
 
   // ✅ Save notification
+  // ✅ Save notification
   await Notification.create({
     user: user._id || user.id,
     title: `Order ${type}`,
@@ -128,9 +130,14 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
     type: ["payment_success", "payment_failed"].includes(type) ? "payment" : "order"
   });
 
-  // ✅ Send via SMS/Email
-  if (user.phone) await sendSMS(user.phone, message);
-  if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
+  // ✅ Only send SMS/email in production
+  if (process.env.NODE_ENV === "production") {
+    if (user.phone) await sendSMS(user.phone, message);
+    if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
+  } else {
+    console.log(`[DEV] Would send SMS to ${user.phone}: ${message}`);
+    console.log(`[DEV] Would send Email to ${user.email}: ${message}`);
+  }
 }
 
 export async function notifyIssueEvent({ user, issue, type }) {
@@ -168,13 +175,20 @@ export async function notifyIssueEvent({ user, issue, type }) {
     type: "issue" // make sure 'issue' is in Notification enum
   });
 
-  // Send SMS
-  if (user?.phone || issue.phone) {
-    await sendSMS(user?.phone || issue.phone, message);
-  }
+  // ✅ Save notification
+  await Notification.create({
+    user: user._id || user.id,
+    title: `Order ${type}`,
+    message,
+    type: ["payment_success", "payment_failed"].includes(type) ? "payment" : "order"
+  });
 
-  // Send Email
-  if (user?.email || issue.email) {
-    await sendEmail(user?.email || issue.email, "Issue Notification", `<p>${message}</p>`);
+  // ✅ Only send SMS/email in production
+  if (process.env.NODE_ENV === "production") {
+    if (user.phone) await sendSMS(user.phone, message);
+    if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
+  } else {
+    console.log(`[DEV] Would send SMS to ${user.phone}: ${message}`);
+    console.log(`[DEV] Would send Email to ${user.email}: ${message}`);
   }
 }

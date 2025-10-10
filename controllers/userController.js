@@ -20,10 +20,10 @@ export const getProfile = async (req, res) => {
 
 export const saveAddress = async (req, res, next) => {
   try {
-    const { label, line1, line2, city, state, landmark } = req.body;
+    const { label, line1, line2, city,lga,  state, landmark } = req.body;
 
     // Calculate zone
-    const zone = resolveZone({ city, state }) || "zone1";
+    const zone = resolveZone({ city, lga, state }) || "zone1";
 
     // Fetch user
     const user = await User.findById(req.user._id);
@@ -35,6 +35,7 @@ export const saveAddress = async (req, res, next) => {
       addr.line1 === line1 &&
       addr.line2 === line2 &&
       addr.city === city &&
+      addr.lga === lga &&
       addr.state === state &&
       addr.landmark === landmark
     );
@@ -44,7 +45,7 @@ export const saveAddress = async (req, res, next) => {
     }
 
     // Add new address
-    const newAddress = { label, line1, line2, city, state, landmark, zone };
+    const newAddress = { label, line1, line2, city, lga, state, landmark, zone };
     user.addresses.push(newAddress);
 
     // Save user
@@ -76,12 +77,17 @@ export const updateAddress = async (req, res, next) => {
     addr.line1 = line1 || addr.line1;
     addr.line2 = line2 ?? addr.line2;
     addr.city = city || addr.city;
+    addr.lga = lga || addr.lga;
     addr.state = state || addr.state;
     addr.landmark = landmark ?? addr.landmark;
 
     // ✅ Always recalc zone if city/state changed
-    if (city || state) {
-      addr.zone = resolveZone({ city: addr.city, state: addr.state });
+   if (city || lga || state) {
+      addr.zone = resolveZone({
+        city: addr.city,
+        lga: addr.lga,
+        state: addr.state,
+      });
     }
 
     await user.save();

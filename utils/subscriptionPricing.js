@@ -82,28 +82,27 @@ export async function computeSubscriptionItemPrice(
 /**
  * Compute subscription delivery fee.
  */
-export async function computeSubscriptionDeliveryFee (
-  plan,
-  address,
-  subtotal = 0,
-  usage = null
-) {
-  const zone = resolveZone(address)
-  const inside = await isInsideServiceZone(address)
+/**
+ * Compute subscription delivery fee with zone + proximity.
+ */
+export async function computeSubscriptionDeliveryFee(plan, address, subtotal = 0, usage = null) {
+  const zone = resolveZone(address);
+  const inside = await isInsideServiceZone(address);
+  const includedTrips = plan.included_trips ?? 2;
 
-  const includedTrips = plan.included_trips ?? 2
+  let fee = await getDeliveryFeeForZone(zone, subtotal, address);
 
-  if (plan.family === 'BASIC_SAVER') {
-    return await getDeliveryFeeForZone(zone, subtotal)
-  }
+  // BASIC_SAVER never includes free trips
+  if (plan.family === "BASIC_SAVER") return fee;
 
-  if ((plan.family === 'PREM_CHOICE' || plan.family === 'VIP') && inside) {
+  // PREMIUM / VIP can include free trips if inside zone
+  if ((plan.family === "PREM_CHOICE" || plan.family === "VIP") && inside) {
     if (usage && (usage.trips_used ?? 0) < includedTrips) {
-      usage.trips_used = (usage.trips_used ?? 0) + 1
-      await usage.save()
-      return 0
+      usage.trips_used = (usage.trips_used ?? 0) + 1;
+      await usage.save();
+      return 0;
     }
   }
 
-  return await getDeliveryFeeForZone(zone, subtotal)
+  return Math.round(fee);
 }

@@ -28,7 +28,7 @@ router.get('/refer', requireAuth, getReferralInfo)
 router.post("/subscribe", requireAuth, subscribe);
 
 // Public
-router.get("/plans", requireAuth, listPlans);
+router.get("/plans", listPlans);
 router.get("/plans/:code", requireAuth, getPlan);
 
 

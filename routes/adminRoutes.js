@@ -61,7 +61,7 @@ router.delete("/plans/:code", requireAuth, requireAdmin, deactivatePlan);
 //issues routes
 router.get("/issues",  requireAuth, requireEmployeeOrAdmin, listIssues);
 router.patch("/issues/:id",  requireAuth, requireEmployeeOrAdmin, updateIssue);
-router.get(".issues/total", requireAuth, requireEmployeeOrAdmin, getTotalIssues);
+router.get("/issues/total", requireAuth, requireEmployeeOrAdmin, getTotalIssues);
 
 //review/feedback routes
 router.get('/reviews', requireAuth,requireEmployeeOrAdmin, listReviews);

@@ -64,6 +64,7 @@ const OrderSchema = new mongoose.Schema(
         line1: String,
         line2: String,
         city: String,
+        lga: String,
         state: String,
         landmark: String,
         zone: String
@@ -77,6 +78,7 @@ const OrderSchema = new mongoose.Schema(
         line1: String,
         line2: String,
         city: String,
+        lga: String,
         state: String,
         landmark: String,
         zone: String

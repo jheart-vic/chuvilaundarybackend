@@ -80,7 +80,7 @@ router.post("/webhook/paystack", async (req, res) => {
       order.payment.balance = success ? 0 : order.payment.balance;
       order.payment.status = success ? "PAID" : "FAILED";
       order.payment.paymentReference = reference;
-      order.status = success ? "Confirmed" : "Pending";
+      order.status = success ? "Booked" : "Pending";
       order.history.push({
         status: order.status,
         note: success ? "Payment successful" : "Payment failed",
@@ -94,6 +94,14 @@ router.post("/webhook/paystack", async (req, res) => {
         type: success ? "orderDelivered" : "payment_failed",
       });
 
+      // ✅ Notify Admin(s)
+        await notifyOrderEvent({
+          user: process.env.ADMIN_USER_ID, // replace with your admin's ID or loop through admin list
+          order,
+          type: success ? "orderCreatedForAdmin" : "payment_failed_forAdmin",
+        });
+
+
       console.log(
         success
           ? `✅ Paystack order confirmed: ${order._id}`
@@ -105,7 +113,7 @@ router.post("/webhook/paystack", async (req, res) => {
 
     // === 🧠 Idempotency for Subscriptions ===
     const existingSub = await Subscription.findOne({
-      "paymentPlan.lastTransactionId": reference,
+      "payment.lastTransactionId": reference,
     });
     if (existingSub) {
       console.log("♻️ Duplicate Paystack webhook ignored for Subscription:", existingSub._id);
@@ -115,8 +123,8 @@ router.post("/webhook/paystack", async (req, res) => {
     // === 2️⃣ Handle Subscription Payments (Initial or Recurring) ===
     const subscription = await Subscription.findOne({
       $or: [
-        { "paymentPlan.transactionId": reference },
-        { "paymentPlan.subscriptionCode": data.subscription_code },
+        { "payment.transactionId": reference },
+        { "payment.subscriptionCode": data.subscription_code },
       ],
     }).populate("plan");
 
@@ -126,10 +134,10 @@ router.post("/webhook/paystack", async (req, res) => {
       const now = DateTime.now().setZone("Africa/Lagos");
 
       if (success) {
-        subscription.paymentPlan.lastTransactionId = reference;
-        subscription.paymentPlan.amountPaid += amount;
-        subscription.paymentPlan.balance = 0;
-        subscription.paymentPlan.failedAttempts = 0;
+        subscription.payment.lastTransactionId = reference;
+        subscription.payment.amountPaid += amount;
+        subscription.payment.balance = 0;
+        subscription.payment.failedAttempts = 0;
         subscription.status = "ACTIVE";
 
         const newPeriodStart = subscription.period_end
@@ -164,8 +172,8 @@ router.post("/webhook/paystack", async (req, res) => {
 
         console.log(`✅ Subscription activated or renewed: ${subscription._id}`);
       } else {
-        subscription.paymentPlan.failedAttempts += 1;
-        if (subscription.paymentPlan.failedAttempts >= 3) {
+        subscription.payment.failedAttempts += 1;
+        if (subscription.payment.failedAttempts >= 3) {
           subscription.status = "PAUSED";
           console.warn(`⚠️ Subscription auto-paused after 3 failures: ${subscription._id}`);
         }

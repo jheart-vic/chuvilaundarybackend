@@ -92,7 +92,7 @@ router.post("/webhook/monnify", async (req, res) => {
       order.payment.paymentReference = paymentReference;
 
       const statusNote = success ? "Payment successful" : "Payment failed";
-      order.status = success ? "Confirmed" : "Pending";
+      order.status = success ? "Booked" : "Pending";
       order.history.push({ status: order.status, note: statusNote });
 
       await order.save();
@@ -105,6 +105,13 @@ router.post("/webhook/monnify", async (req, res) => {
           ? { amount: order.payment.amountPaid, method: order.payment.method }
           : undefined,
       });
+
+      // ✅ Notify Admin(s)
+        await notifyOrderEvent({
+          user: process.env.ADMIN_USER_ID,
+          order,
+          type: success ? "orderCreatedForAdmin" : "payment_failed_forAdmin",
+        });
 
       console.log(
         success
