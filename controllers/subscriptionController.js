@@ -362,24 +362,24 @@ export const cancelSubscription = async (req, res) => {
     }
 
     // 🔁 Identify gateway
-    const gateway = subscription.paymentPlan?.gateway;
+    const gateway = subscription.payment?.gateway;
 
     // 🚫 Cancel auto-payment if applicable
     if (gateway === "MONNIFY") {
-      const mandateRef = subscription.paymentPlan?.monnify?.authorizationRef;
+      const mandateRef = subscription.payment?.monnify?.authorizationRef;
       if (mandateRef) {
         await cancelMonnifyMandate(mandateRef);
       }
     } else if (gateway === "PAYSTACK") {
-      const subscriptionCode = subscription.paymentPlan?.paystack?.subscriptionCode; // optional
-      const authorizationCode = subscription.paymentPlan?.paystack?.authorizationCode;
+      const subscriptionCode = subscription.payment?.paystack?.subscriptionCode; // optional
+      const authorizationCode = subscription.payment?.paystack?.authorizationCode;
 
       if (subscriptionCode) {
         // Case 1: Using Paystack Subscription API
         await cancelPaystackSubscription(subscriptionCode);
       } else if (authorizationCode) {
         // Case 2: Manual recurring via stored authorization
-        subscription.paymentPlan.paystack.authorizationCode = null;
+        subscription.payment.paystack.authorizationCode = null;
         subscription.auto_payment_cancelled = true;
       }
     }
