@@ -66,7 +66,7 @@ export const saveAddress = async (req, res, next) => {
 export const updateAddress = async (req, res, next) => {
   try {
     const { addressId } = req.params;
-    const { label, line1, line2, city, state, landmark } = req.body;
+    const { label, line1, line2, city,lga, state, landmark } = req.body;
 
     const user = await User.findById(req.user._id);
     const addr = user.addresses.id(addressId);

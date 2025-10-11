@@ -260,11 +260,6 @@ export const createServiceSchema = Joi.object({
 
 
 export const reviewSchema = Joi.object({
-  name: Joi.string().trim().min(2).max(50).required().messages({
-    'string.empty': 'Name is required',
-    'string.min': 'Name must be at least 2 characters long',
-    'string.max': 'Name must not exceed 50 characters'
-  }),
   rating: Joi.number().integer().min(1).max(5).required().messages({
     'number.base': 'Rating must be a number',
     'number.min': 'Rating must be at least 1',
@@ -317,7 +312,7 @@ export const createCouponSchema = Joi.object({
   });
 
 export const createIssueSchema = Joi.object({
-  fulName: Joi.string().min(2).max(100).required(),
+  fullName: Joi.string().min(2).max(100).required(),
   phone: Joi.string()
     .pattern(/^\+?[0-9]{10,15}$/) // E.164 format
     .required(),
