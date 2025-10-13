@@ -5,49 +5,70 @@ import mongoose from 'mongoose';
 // User creates a review for an order
 export async function createReview(req, res, next) {
   try {
-    const { rating, comment, orderId } = req.body; // <-- expect orderId instead of Mongo _id
+    const { rating, comment, orderId } = req.body;
 
-    // Find order by orderId
+    // Find order by orderId (not _id)
     const foundOrder = await Order.findOne({ orderId });
-    if (!foundOrder)
-      return res.status(404).json({ success: false, message: 'Order not found' });
-
-    // Check user owns the order
-    if (String(foundOrder.user) !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: 'Not authorized to review this order' });
+    if (!foundOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
     }
 
-    // Check order is delivered
+    // Check if the authenticated user owns this order
+    if (String(foundOrder.user) !== String(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to review this order'
+      });
+    }
+
+    // Ensure order is delivered before allowing review
     if (foundOrder.status !== 'Delivered') {
-      return res.status(400).json({ success: false, message: 'You can only review delivered orders' });
+      return res.status(400).json({
+        success: false,
+        message: 'You can only review delivered orders'
+      });
     }
 
-    // Ensure user hasn't reviewed this order yet
-    const existing = await Review.findOne({ user: req.user._id, order: foundOrder._id });
-    if (existing)
-      return res.status(400).json({ success: false, message: 'Order already reviewed' });
+    // Prevent duplicate reviews for the same order
+    const existing = await Review.findOne({
+      user: req.user._id,
+      order: foundOrder._id
+    });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order already reviewed'
+      });
+    }
 
-    // Create review
+    // Create new review
     const review = await Review.create({
       user: req.user._id,
       order: foundOrder._id,
       rating,
-      comment,
+      comment
     });
 
-    // Update order rating
+    // Update order's average rating + count efficiently
     foundOrder.reviewCount = (foundOrder.reviewCount || 0) + 1;
     foundOrder.rating =
-      ((foundOrder.rating || 0) * (foundOrder.reviewCount - 1) + rating) /
-      foundOrder.reviewCount;
+      ((foundOrder.rating || 0) * (foundOrder.reviewCount - 1) + rating) / foundOrder.reviewCount;
+
     await foundOrder.save();
 
-    res.status(201).json({ success: true, review });
+    res.status(201).json({
+      success: true,
+      message: 'Review submitted successfully',
+      review
+    });
+
   } catch (err) {
     next(err);
   }
 }
-
 
 
 //Admin or user can list reviews for an order

@@ -269,7 +269,10 @@ export const reviewSchema = Joi.object({
   comment: Joi.string().trim().max(500).allow('').messages({
     'string.max': 'Comment must not exceed 500 characters'
   }),
-  order: Joi.string().optional()
+  orderId: Joi.string().required().messages({
+    'any.required': 'Order ID is required',
+    'string.empty': 'Order ID cannot be empty'
+  })
 });
 
 

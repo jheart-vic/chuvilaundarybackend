@@ -97,7 +97,6 @@ export const updateAddress = async (req, res, next) => {
   }
 };
 
-
 export const getAddresses = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select("addresses");
@@ -111,29 +110,6 @@ export const getAddresses = async (req, res, next) => {
     next(err);
   }
 };
-
-
-// export const updatePreferences = async (req, res, next) => {
-//   try {
-//     const userId = req.user?._id;
-//     const { preferences } = req.body;
-
-//     if (!userId) return res.status(401).json({ message: "unauthenticated" });
-
-//     const updatedUser = await User.findOneAndUpdate(
-//       { _id: userId },
-//       { $set: Object.fromEntries(
-//         Object.entries(preferences).map(([key, value]) => [`preferences.${key}`, value])
-//       ) },
-//       { new: true, projection: { preferences: 1, _id: 0 } } // Only return preferences
-//     );
-
-//     res.json({ preferences: updatedUser.preferences });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
 
 export const updatePreferences = async (req, res, next) => {
   try {
@@ -163,7 +139,6 @@ export const updatePreferences = async (req, res, next) => {
     next(err);
   }
 };
-
 
 export const joinMembership = async (req, res, next) => {
   try {

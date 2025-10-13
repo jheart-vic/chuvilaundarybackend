@@ -15,16 +15,24 @@ const router = express.Router()
 /**
  * ✅ Verify Paystack webhook signature
  */
-function verifyPaystackSignature (req) {
+function verifyPaystackSignature(req) {
   try {
     const secret = process.env.PAYSTACK_SECRET_KEY
     const signature = req.headers['x-paystack-signature']
+
     if (!signature || !secret) return false
 
     const computed = crypto
       .createHmac('sha512', secret)
-      .update(JSON.stringify(req.body))
+      .update(req.rawBody)  // ✅ use raw body preserved in entrypoint
       .digest('hex')
+
+
+console.log('🧪 Signature received:', req.headers['x-paystack-signature'])
+console.log('🧪 Signature computed:', crypto
+  .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+  .update(req.rawBody)
+  .digest('hex'))
 
     return computed === signature
   } catch (err) {
@@ -32,6 +40,8 @@ function verifyPaystackSignature (req) {
     return false
   }
 }
+
+
 
 /**
  * ✅ Paystack Webhook
