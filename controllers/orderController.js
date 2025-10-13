@@ -444,36 +444,53 @@ export const updateOrderStatus = async (req, res, next) => {
 
 export const cancelOrderUser = async (req, res, next) => {
   try {
-    const order = await Order.findOne({ orderId: req.params.id }).populate(
-      'user'
-    ) // 👈 switched
-    if (!order) return res.status(404).json({ message: 'order not found' })
-
-    if (order.user._id.toString() !== req.user._id.toString()) {
-      return res
-        .status(403)
-        .json({ message: 'You can only cancel your own orders' })
+    const order = await Order.findOne({ orderId: req.params.id }).populate('user');
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
     }
 
-    order.status = 'Cancelled'
+    // Ensure user owns the order
+    if (order.user._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only cancel your own orders' });
+    }
+
+    // Ensure order isn't already cancelled or delivered
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({ message: 'Order already cancelled' });
+    }
+    if (order.status === 'Delivered') {
+      return res.status(400).json({ message: 'Delivered orders cannot be cancelled' });
+    }
+
+    // Store cancellation reason
+    const reason = req.body.reason?.trim() || 'Cancelled by user';
+
+    order.status = 'Cancelled';
+    order.cancellationReason = reason;
     order.history.push({
       status: 'Cancelled',
-      note: req.body.note || 'Cancelled by user'
-    })
+      note: reason
+    });
 
-    await order.save()
+    await order.save();
 
+    // Send notifications
     await notifyOrderEvent({
       user: order.user,
       order,
       type: 'cancelled_user'
-    })
+    });
 
-    res.json(order)
+    res.json({
+      success: true,
+      message: 'Order cancelled successfully',
+      order
+    });
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
+
 
 export const trackOrderPublic = async (req, res, next) => {
   try {

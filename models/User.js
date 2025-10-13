@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 
+
 const AddressSchema = new mongoose.Schema({
   label: { type: String, default: 'Home' },
   line1: String,
@@ -23,6 +24,7 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     default: null
   },
+  photoUrl:{ type: String, default: null },
   defaultPassword: { type: String, select: false },
   membershipStartedAt: Date,
   addresses: [AddressSchema],

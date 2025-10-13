@@ -6,17 +6,28 @@ import { DateTime } from 'luxon';
 
 export const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select(
-      "-password -verificationCode -verificationCodeExpires"
-    );
-    if (!user) return res.status(404).json({ error: "User not found" });
+    const user = await User.findById(req.user._id)
+      .select("-password -verificationCode -verificationCodeExpires")
+      .populate("referredBy", "fullName");
 
-    res.json(user);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // 👇 Find users who were referred by this user
+    const referredUsers = await User.find({ referredBy: user._id })
+      .select("fullName phone email createdAt");
+
+    res.json({
+      ...user.toObject(),
+      referredUsers // attach them to the profile response
+    });
   } catch (err) {
     console.error("getProfile error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
 
 export const saveAddress = async (req, res, next) => {
   try {

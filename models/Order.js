@@ -36,7 +36,11 @@ const OrderSchema = new mongoose.Schema(
       unique: true,
       index: true
     },
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false,},
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false
+    },
     userName: String,
     items: [OrderItemSchema],
     notes: String,
@@ -100,6 +104,11 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       enum: ['STANDARD', 'PREMIUM', 'VIP'],
       required: true
+    },
+    cancellationReason: {
+      type: String,
+      trim: true,
+      maxlength: 500
     },
 
     subscriptionPlanCode: { type: String }, // e.g. "PREM_CHOICE_24"
