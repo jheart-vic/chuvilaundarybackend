@@ -626,8 +626,6 @@ export const createOrder = async (req, res, next) => {
   }
 };
 
-
-
 export const getOrder = async (req, res, next) => {
   try {
     const order = await Order.findOne({ orderId: req.params.id }) // 👈 switched to orderId
@@ -775,5 +773,23 @@ export const trackOrderPublic = async (req, res, next) => {
     })
   } catch (err) {
     next(err)
+  }
+}
+
+export async function getOrderReceipt(req, res) {
+  try {
+    const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
+
+    if (!order)
+      return res.status(404).json({ message: 'Order not found' })
+
+    if (order.user._id.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: 'Unauthorized' })
+
+    const receiptPath = await generateReceipt(order)
+    res.sendFile(path.resolve(receiptPath))
+  } catch (err) {
+    console.error('Receipt generation error:', err)
+    res.status(500).json({ message: 'Failed to generate receipt' })
   }
 }
