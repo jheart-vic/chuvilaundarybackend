@@ -7,6 +7,7 @@ import SubUsage from '../models/SubUsage.js'
 import { notifyOrderEvent } from '../services/notificationService.js'
 import dotenv from 'dotenv'
 import User from '../models/User.js'
+import { generateReceipt } from '../utils/generateReceipt.js'
 dotenv.config()
 
 const router = express.Router()
@@ -95,6 +96,7 @@ router.post('/webhook/paystack', async (req, res) => {
       })
 
       await order.save()
+     const receiptPath = await generateReceipt(order)
 
       const notifyTasks = [
         (async () => {
@@ -102,6 +104,7 @@ router.post('/webhook/paystack', async (req, res) => {
             await notifyOrderEvent({
               user: order.user,
               order,
+              attachmentPath: receiptPath,
               type: success ? 'orderDelivered' : 'payment_failed'
             })
           } catch (err) {
@@ -117,6 +120,7 @@ router.post('/webhook/paystack', async (req, res) => {
                 notifyOrderEvent({
                   user: admin,
                   order,
+                  attachmentPath: receiptPath,
                   type: success
                     ? 'orderCreatedForAdmin'
                     : 'payment_failed_forAdmin'

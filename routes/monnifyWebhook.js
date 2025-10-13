@@ -6,6 +6,7 @@ import Subscription from "../models/Subscription.js";
 import SubUsage from "../models/SubUsage.js";
 import { notifyOrderEvent } from "../services/notificationService.js";
 import dotenv from "dotenv";
+import { generateReceipt } from "../utils/generateReceipt.js";
 dotenv.config();
 
 const router = express.Router();
@@ -96,10 +97,11 @@ router.post("/webhook/monnify", async (req, res) => {
       order.history.push({ status: order.status, note: statusNote });
 
       await order.save();
-
+      const receiptPath = await generateReceipt(order)
       await notifyOrderEvent({
         user: order.user,
         order,
+        attachmentPath: receiptPath,
         type: success ? "orderDelivered" : "payment_failed",
         extra: success
           ? { amount: order.payment.amountPaid, method: order.payment.method }
@@ -110,6 +112,7 @@ router.post("/webhook/monnify", async (req, res) => {
         await notifyOrderEvent({
           user: process.env.ADMIN_USER_ID,
           order,
+          attachmentPath: receiptPath,
           type: success ? "orderCreatedForAdmin" : "payment_failed_forAdmin",
         });
 

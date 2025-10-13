@@ -17,6 +17,7 @@ const OrderItemSchema = new mongoose.Schema(
 )
 
 export const Statuses = [
+  'Pending Payment',
   'Booked',
   'Picked Up',
   'In Cleaning',
@@ -103,6 +104,7 @@ const OrderSchema = new mongoose.Schema(
 
     subscriptionPlanCode: { type: String }, // e.g. "PREM_CHOICE_24"
     slaHours: { type: Number },
+    discount: { type: Number, default: 0 },
 
     expectedReadyAt: { type: Date },
     payment: PaymentPlanSchema

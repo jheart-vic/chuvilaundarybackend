@@ -29,6 +29,7 @@
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.6",
+    "pdf-lib": "^1.17.1",
     "sharp": "^0.34.4",
     "socket.io": "^4.8.1",
     "streamifier": "^0.1.1",

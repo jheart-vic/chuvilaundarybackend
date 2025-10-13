@@ -13,6 +13,12 @@ const PaymentPlanSchema = new mongoose.Schema(
       enum: ['FULL', 'INSTALLMENT'],
       default: 'FULL'
     },
+  // ✅ Add this field
+    status: {
+      type: String,
+      enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
+      default: 'PENDING'
+    },
     gateway: {
       type: String,
       enum: ['PAYSTACK', 'MONNIFY'],

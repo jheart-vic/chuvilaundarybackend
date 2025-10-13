@@ -49,13 +49,14 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 })
 
-export async function sendEmail (to, subject, html) {
+export async function sendEmail (to, subject, html, attachments = []) {
   try {
     const info = await transporter.sendMail({
       from: `"${process.env.APP_NAME}" <${process.env.SMTP_USER}>`,
       to,
       subject,
-      html
+      html,
+    attachments
     })
     return info
   } catch (err) {
@@ -64,7 +65,7 @@ export async function sendEmail (to, subject, html) {
   }
 }
 
-export async function notifyOrderEvent({ user, order, type, extra = {} }) {
+export async function notifyOrderEvent({ user, order, type, extra = {}, attachmentPath = null }) {
   const templates = {
     deliveryPin: "Your Chuvilaundry delivery PIN is {{pin}}. Share with our rider to collect your items safely.",
     loginCode: "Your Chuvilaundry login code is {{code}}. Valid for 10 minutes, one-time use only.",
@@ -130,14 +131,22 @@ export async function notifyOrderEvent({ user, order, type, extra = {} }) {
     type: ["payment_success", "payment_failed"].includes(type) ? "payment" : "order"
   });
 
-  // ✅ Only send SMS/email in production
   if (process.env.NODE_ENV === "production") {
-    if (user.phone) await sendSMS(user.phone, message);
-    if (user.email) await sendEmail(user.email, `Order ${type}`, `<p>${message}</p>`);
-  } else {
-    console.log(`[DEV] Would send SMS to ${user.phone}: ${message}`);
-    console.log(`[DEV] Would send Email to ${user.email}: ${message}`);
+  if (user.phone) await sendSMS(user.phone, message);
+
+  if (user.email) {
+    const attachments = attachmentPath
+      ? [{ filename: `${order.orderId}_receipt.pdf`, path: attachmentPath }]
+      : [];
+    await sendEmail(
+      user.email,
+      `Order ${type}`,
+      `<p>${message}</p>`,
+      attachments
+    );
   }
+}
+
 }
 
 export async function notifyIssueEvent({ user, issue, type }) {
@@ -173,14 +182,6 @@ export async function notifyIssueEvent({ user, issue, type }) {
     title: type === "issue_created" ? "Issue Created" : "Issue Updated",
     message,
     type: "issue" // make sure 'issue' is in Notification enum
-  });
-
-  // ✅ Save notification
-  await Notification.create({
-    user: user._id || user.id,
-    title: `Order ${type}`,
-    message,
-    type: ["payment_success", "payment_failed"].includes(type) ? "payment" : "order"
   });
 
   // ✅ Only send SMS/email in production
