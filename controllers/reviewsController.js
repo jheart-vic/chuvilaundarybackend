@@ -5,32 +5,41 @@ import mongoose from 'mongoose';
 // User creates a review for an order
 export async function createReview(req, res, next) {
   try {
-    const { rating, comment, order } = req.body;
+    const { rating, comment, orderId } = req.body; // <-- expect orderId instead of Mongo _id
 
-    const foundOrder = await Order.findById(order);
-    if (!foundOrder) return res.status(404).json({ success: false, message: 'Order not found' });
+    // Find order by orderId
+    const foundOrder = await Order.findOne({ orderId });
+    if (!foundOrder)
+      return res.status(404).json({ success: false, message: 'Order not found' });
 
+    // Check user owns the order
     if (String(foundOrder.user) !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to review this order' });
     }
 
+    // Check order is delivered
     if (foundOrder.status !== 'Delivered') {
       return res.status(400).json({ success: false, message: 'You can only review delivered orders' });
     }
 
-    const existing = await Review.findOne({ user: req.user._id, order });
-    if (existing) return res.status(400).json({ success: false, message: 'Order already reviewed' });
+    // Ensure user hasn't reviewed this order yet
+    const existing = await Review.findOne({ user: req.user._id, order: foundOrder._id });
+    if (existing)
+      return res.status(400).json({ success: false, message: 'Order already reviewed' });
 
+    // Create review
     const review = await Review.create({
       user: req.user._id,
-      order,
+      order: foundOrder._id,
       rating,
-      comment
+      comment,
     });
 
+    // Update order rating
     foundOrder.reviewCount = (foundOrder.reviewCount || 0) + 1;
     foundOrder.rating =
-      ((foundOrder.rating || 0) * (foundOrder.reviewCount - 1) + rating) / foundOrder.reviewCount;
+      ((foundOrder.rating || 0) * (foundOrder.reviewCount - 1) + rating) /
+      foundOrder.reviewCount;
     await foundOrder.save();
 
     res.status(201).json({ success: true, review });
@@ -38,6 +47,7 @@ export async function createReview(req, res, next) {
     next(err);
   }
 }
+
 
 
 //Admin or user can list reviews for an order

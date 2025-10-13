@@ -74,7 +74,7 @@ export async function sendEmail (to, subject, html, attachments = []) {
       to,
       subject,
       html,
-    attachments
+    attachments,
     })
     return info
   } catch (err) {

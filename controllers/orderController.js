@@ -26,320 +26,6 @@ function generateOrderId (docId) {
 /**
  * Create order (supports retail and subscription)
  */
-// export const createOrder = async (req, res, next) => {
-//   const MAX_RETRIES = 3;
-//   let attempt = 0;
-
-//   while (attempt < MAX_RETRIES) {
-//     const session = await mongoose.startSession();
-//     session.startTransaction();
-
-//     try {
-//       const payload = req.body;
-
-//       // 🧩 1. Fetch logged-in user
-//       const user = await User.findById(req.user._id)
-//         .populate("currentSubscription")
-//         .session(session);
-//       if (!user) return res.status(404).json({ message: "User not found" });
-
-//       const userPhone = user.phone;
-//       if (!userPhone) return res.status(400).json({ message: "User phone required" });
-//       if (!user.email)
-//         return res.status(400).json({ message: "User email required for payment" });
-
-//       // 🧾 2. Basic payload validations
-//       if (!payload.items?.length)
-//         return res.status(400).json({ message: "At least one item required" });
-//       if (!payload.pickup?.address)
-//         return res.status(400).json({ message: "Pickup address required" });
-//       if (!payload.delivery?.address)
-//         return res.status(400).json({ message: "Delivery address required" });
-
-//       // 🎯 Generate delivery pin and orderId
-//       const deliveryPin = generateDeliveryPin();
-//       const tempId = new mongoose.Types.ObjectId();
-//       const orderId = generateOrderId(tempId);
-
-//       // 🖼️ 3. Handle photo uploads (parallel, fail silently)
-//       let photos = [];
-//       if (req.files?.length) {
-//         photos = await Promise.all(
-//           req.files.map(async f => {
-//             try {
-//               const result = await uploadToCloudinary(f.buffer, "laundry/photos");
-//               return result.secure_url;
-//             } catch (err) {
-//               console.warn("Photo upload failed:", err.message);
-//               return null; // ignore failed uploads
-//             }
-//           })
-//         ).then(results => results.filter(Boolean)); // remove nulls
-//       }
-
-//       // 🧾 4. Handle coupons
-//       const couponCode = payload.couponCode?.trim().toUpperCase() || null;
-
-//       // 📦 5. Subscription check
-//       const subscription = user.currentSubscription;
-//       let plan = null;
-//       let usage = null;
-
-//       if (subscription?.status === "ACTIVE") {
-//         plan = await SubscriptionPlan.findOne({
-//           code: subscription.plan_code,
-//           active: true,
-//         }).session(session);
-
-//         if (plan) {
-//           const periodLabel = DateTime.now().toFormat("yyyy-LL");
-//           usage = await SubUsage.findOneAndUpdate(
-//             { subscription: subscription._id, period_label: periodLabel },
-//             {},
-//             { new: true, upsert: true, session }
-//           );
-//         }
-//       }
-
-//       // ⚖️ 6. Determine pricing model and tier
-//       const isSubscription = payload.pricingModel === "SUBSCRIPTION" || !!plan;
-//       const pricingModel = isSubscription ? "SUBSCRIPTION" : "RETAIL";
-
-//       let serviceTier = "STANDARD";
-//       let tierOverrideMessage = null;
-//       if (isSubscription) {
-//         if (payload.serviceTier && payload.serviceTier.toUpperCase() !== plan?.tier) {
-//           tierOverrideMessage = `Service tier overridden to ${plan?.tier}`;
-//         }
-//         serviceTier = plan?.tier || "STANDARD";
-//       } else {
-//         serviceTier = payload.serviceTier?.toUpperCase() || "STANDARD";
-//       }
-
-//       // 💰 7. Compute totals
-//       const totals = await computeOrderTotals(
-//         {
-//           ...payload,
-//           couponCode,
-//           pricingModel,
-//           subscriptionPlanCode: plan?.code,
-//           userPhone,
-//           serviceTier,
-//         },
-//         { plan, usage }
-//       );
-
-//       // ⏰ 8. Compute SLA & ready time
-//       const hasExpress = payload.items.some(i => i.express);
-//       const hasSameDay = Boolean(payload.sameDay);
-
-//       if (hasSameDay) {
-//         const totalItems = payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
-//         if (totalItems > 15) {
-//           return res
-//             .status(400)
-//             .json({ message: "Same-day orders limited to 15 items max" });
-//         }
-//       }
-
-//       const expectedReadyAt = computeExpectedReadyAt(
-//         new Date(payload.pickup.date),
-//         serviceTier,
-//         { express: hasExpress, sameDay: hasSameDay }
-//       );
-//       const slaHours = Math.round(
-//         (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
-//       );
-// // 💳 9. Payment setup
-// const paymentInput = payload.payment || {};
-// if (!paymentInput.method)
-//   return res.status(400).json({ message: "Payment method required" });
-// if (!paymentInput.gateway)
-//   return res.status(400).json({ message: "Payment gateway required" });
-
-// let paymentData = {
-//   method: paymentInput.method,
-//   mode: paymentInput.mode || "FULL",
-//   amountPaid: 0,
-//   balance: totals.grandTotal,
-//   installments: [],
-//   transactionId: null,
-//   checkoutUrl: null,
-//   gateway: paymentInput.gateway,
-//   failedAttempts: 0,
-// };
-
-// let paymentInitResponse = null;
-
-// // Always initialize payment if CARD or BANK_TRANSFER
-// if (["CARD", "BANK_TRANSFER"].includes(paymentInput.method)) {
-//   if (paymentInput.gateway === "PAYSTACK") {
-//     paymentInitResponse = await initPaystackPayment({
-//       amount: totals.grandTotal,
-//       email: user.email,
-//       name: payload.userName || user.fullName || "Customer",
-//       phone: user.phone,
-//       orderId,
-//     });
-
-//     paymentData.transactionId = paymentInitResponse.reference;
-//     paymentData.checkoutUrl = paymentInitResponse.authorization_url;
-//   } else {
-//     paymentInitResponse = await initMonnifyPayment({
-//       amount: totals.grandTotal,
-//       customerName: payload.userName || user.fullName || "Customer",
-//       customerEmail: user.email,
-//       customerPhone: user.phone,
-//       orderId,
-//       paymentMethod:
-//         paymentInput.method === "CARD" ? "CARD" : "ACCOUNT_TRANSFER",
-//     });
-
-//     paymentData.transactionId =
-//       paymentInitResponse.reference || paymentInitResponse.transactionReference;
-//     paymentData.checkoutUrl =
-//       paymentInitResponse.checkoutUrl || paymentInitResponse.authorization_url;
-//   }
-// }
-
-// // 💰 Installment validation
-// if (paymentInput.mode === "INSTALLMENT" && paymentInput.installments) {
-//   paymentData.installments = paymentInput.installments.map(i => ({
-//     dueDate: i.dueDate,
-//     amount: i.amount,
-//     status: "PENDING",
-//   }));
-
-//   const totalInstallments = paymentData.installments.reduce((s, i) => s + i.amount, 0);
-//   if (totalInstallments !== totals.grandTotal) {
-//     return res
-//       .status(400)
-//       .json({ message: "Installment amounts must equal grand total" });
-//   }
-// }
-
-
-//       // 🧾 10. Create the order (inside transaction)
-//       const order = await Order.create(
-//         [
-//           {
-//             _id: tempId,
-//             user: user._id,
-//             userPhone,
-//             userName: payload.userName || user.fullName,
-//             items: payload.items,
-//             notes: payload.notes,
-//             photos,
-//             couponCode,
-//             totals,
-//             pickup: payload.pickup,
-//             delivery: payload.delivery,
-//             status: "Booked",
-//             history: [{ status: "Booked", note: "Order created" }],
-//             subscriptionPlanCode: plan?.code || null,
-//             pricingModel,
-//             serviceTier,
-//             slaHours,
-//             expectedReadyAt,
-//             express: hasExpress,
-//             sameDay: hasSameDay,
-//             orderId,
-//             payment: paymentData,
-//             deliveryPin,
-//           },
-//         ],
-//         { session }
-//       );
-
-//       const orderDoc = order[0];
-
-//       // 🎟️ 11. Handle coupon increment
-//       if (couponCode) {
-//         const coupon = await Coupon.findOne({ code: couponCode }).session(session);
-//         if (coupon) {
-//           coupon.uses += 1;
-//           coupon.redemptions.push({
-//             userPhone,
-//             orderId: orderDoc._id,
-//             redeemedAt: DateTime.now().setZone("Africa/Lagos").toJSDate(),
-//           });
-//           await coupon.save({ session });
-//         }
-//       }
-
-//       // 🔁 12. Update subscription usage (if applicable)
-//       if (usage) {
-//         usage.items_used =
-//           (usage.items_used || 0) +
-//           payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
-//         await usage.save({ session });
-//       }
-//       console.log("💳 Paystack init reference:", paymentInitResponse.reference);
-//       console.log("💳 Monnify init reference:", paymentInitResponse.transactionReference) ;
-//       // 🔔 13. Notifications (fail silently, non-blocking)
-//       const notifyTasks = [
-//         (async () => {
-//           try {
-//             await notifyOrderEvent({
-//               user,
-//               order: orderDoc,
-//               type: "orderCreated",
-//               meta: { deliveryPin },
-//             });
-//           } catch (err) {
-//             console.warn("User notification failed:", err.message);
-//           }
-//         })(),
-//         (async () => {
-//           try {
-//             const admins = await User.find({ role: "admin" });
-//             await Promise.all(
-//               admins.map(admin =>
-//                 notifyOrderEvent({
-//                   user: admin,
-//                   order: orderDoc,
-//                   type: "orderCreatedForAdmin",
-//                   meta: { deliveryPin },
-//                 })
-//               )
-//             );
-//           } catch (err) {
-//             console.warn("Admin notifications failed:", err.message);
-//           }
-//         })(),
-//       ];
-
-//       await Promise.all(notifyTasks);
-
-//       // ✅ 14. Commit transaction
-//       await session.commitTransaction();
-//       session.endSession();
-
-//       // ✅ Response
-//       return res.status(201).json({
-//         order: orderDoc,
-//         paymentInitResponse,
-//         ...(tierOverrideMessage && { message: tierOverrideMessage }),
-//       });
-//     } catch (err) {
-//       await session.abortTransaction();
-//       session.endSession();
-
-//       if (
-//         err.hasErrorLabel &&
-//         err.hasErrorLabel("TransientTransactionError") &&
-//         attempt < MAX_RETRIES - 1
-//       ) {
-//         attempt++;
-//         console.warn(`TransientTransactionError, retrying attempt ${attempt + 1}...`);
-//         continue;
-//       }
-
-//       console.error("Create order failed:", err);
-//       return next(err);
-//     }
-//   }
-// };
 
 export const createOrder = async (req, res, next) => {
   const MAX_RETRIES = 3;
@@ -356,22 +42,27 @@ export const createOrder = async (req, res, next) => {
       const user = await User.findById(req.user._id)
         .populate("currentSubscription")
         .session(session);
-
       if (!user) return res.status(404).json({ message: "User not found" });
-      if (!user.phone) return res.status(400).json({ message: "User phone required" });
-      if (!user.email) return res.status(400).json({ message: "User email required for payment" });
+
+      const userPhone = user.phone;
+      if (!userPhone) return res.status(400).json({ message: "User phone required" });
+      if (!user.email)
+        return res.status(400).json({ message: "User email required for payment" });
 
       // 🧾 2. Basic payload validations
-      if (!payload.items?.length) return res.status(400).json({ message: "At least one item required" });
-      if (!payload.pickup?.address) return res.status(400).json({ message: "Pickup address required" });
-      if (!payload.delivery?.address) return res.status(400).json({ message: "Delivery address required" });
+      if (!payload.items?.length)
+        return res.status(400).json({ message: "At least one item required" });
+      if (!payload.pickup?.address)
+        return res.status(400).json({ message: "Pickup address required" });
+      if (!payload.delivery?.address)
+        return res.status(400).json({ message: "Delivery address required" });
 
-      // 🎯 3. Generate delivery pin and orderId
+      // 🎯 Generate delivery pin and orderId
       const deliveryPin = generateDeliveryPin();
       const tempId = new mongoose.Types.ObjectId();
       const orderId = generateOrderId(tempId);
 
-      // 🖼️ 4. Handle photo uploads
+      // 🖼️ 3. Handle photo uploads (parallel, fail silently)
       let photos = [];
       if (req.files?.length) {
         photos = await Promise.all(
@@ -381,16 +72,16 @@ export const createOrder = async (req, res, next) => {
               return result.secure_url;
             } catch (err) {
               console.warn("Photo upload failed:", err.message);
-              return null;
+              return null; // ignore failed uploads
             }
           })
-        ).then(results => results.filter(Boolean));
+        ).then(results => results.filter(Boolean)); // remove nulls
       }
 
-      // 🧾 5. Handle coupons
+      // 🧾 4. Handle coupons
       const couponCode = payload.couponCode?.trim().toUpperCase() || null;
 
-      // 📦 6. Subscription check
+      // 📦 5. Subscription check
       const subscription = user.currentSubscription;
       let plan = null;
       let usage = null;
@@ -411,12 +102,12 @@ export const createOrder = async (req, res, next) => {
         }
       }
 
-      // ⚖️ 7. Determine pricing model and tier
+      // ⚖️ 6. Determine pricing model and tier
       const isSubscription = payload.pricingModel === "SUBSCRIPTION" || !!plan;
       const pricingModel = isSubscription ? "SUBSCRIPTION" : "RETAIL";
+
       let serviceTier = "STANDARD";
       let tierOverrideMessage = null;
-
       if (isSubscription) {
         if (payload.serviceTier && payload.serviceTier.toUpperCase() !== plan?.tier) {
           tierOverrideMessage = `Service tier overridden to ${plan?.tier}`;
@@ -426,19 +117,32 @@ export const createOrder = async (req, res, next) => {
         serviceTier = payload.serviceTier?.toUpperCase() || "STANDARD";
       }
 
-      // 💰 8. Compute totals
+      // 💰 7. Compute totals
       const totals = await computeOrderTotals(
         {
           ...payload,
           couponCode,
           pricingModel,
           subscriptionPlanCode: plan?.code,
-          userPhone: user.phone,
+          userPhone,
           serviceTier,
         },
         { plan, usage }
       );
-      // 🧾 Check if it's user's first order
+
+      // ⏰ 8. Compute SLA & ready time
+      const hasExpress = payload.items.some(i => i.express);
+      const hasSameDay = Boolean(payload.sameDay);
+
+      if (hasSameDay) {
+        const totalItems = payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
+        if (totalItems > 15) {
+          return res
+            .status(400)
+            .json({ message: "Same-day orders limited to 15 items max" });
+        }
+      }
+// 🧾 Check if it's user's first order
       const previousOrder = await Order.findOne({ user: user._id })
       let firstOrderDiscount = 0
 
@@ -447,52 +151,89 @@ export const createOrder = async (req, res, next) => {
         totals.grandTotal = Math.max(totals.grandTotal - firstOrderDiscount, 0)
         totals.discount = (totals.discount || 0) + firstOrderDiscount
       }
-
-      // ⏰ 9. Compute SLA & ready time
-      const hasExpress = payload.items.some(i => i.express);
-      const hasSameDay = Boolean(payload.sameDay);
-
-      if (hasSameDay) {
-        const totalItems = payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
-        if (totalItems > 15)
-          return res.status(400).json({ message: "Same-day orders limited to 15 items max" });
-      }
-
       const expectedReadyAt = computeExpectedReadyAt(
         new Date(payload.pickup.date),
         serviceTier,
         { express: hasExpress, sameDay: hasSameDay }
       );
-
       const slaHours = Math.round(
         (expectedReadyAt - new Date(payload.pickup.date)) / (1000 * 60 * 60)
       );
+// 💳 9. Payment setup
+const paymentInput = payload.payment || {};
+if (!paymentInput.method)
+  return res.status(400).json({ message: "Payment method required" });
+if (!paymentInput.gateway)
+  return res.status(400).json({ message: "Payment gateway required" });
 
-      // 💳 10. Prepare initial payment placeholder
-      const paymentInput = payload.payment || {};
-      if (!paymentInput.method) return res.status(400).json({ message: "Payment method required" });
-      if (!paymentInput.gateway) return res.status(400).json({ message: "Payment gateway required" });
+let paymentData = {
+  method: paymentInput.method,
+  mode: paymentInput.mode || "FULL",
+  amountPaid: 0,
+  balance: totals.grandTotal,
+  installments: [],
+  transactionId: null,
+  checkoutUrl: null,
+  gateway: paymentInput.gateway,
+  failedAttempts: 0,
+};
 
-      const paymentData = {
-        method: paymentInput.method,
-        mode: paymentInput.mode || "FULL",
-        amountPaid: 0,
-        balance: totals.grandTotal,
-        installments: [],
-        transactionId: null,
-        checkoutUrl: null,
-        gateway: paymentInput.gateway,
-        failedAttempts: 0,
-        status: "PENDING",
-      };
+let paymentInitResponse = null;
 
-      // 💰 11. Create order inside transaction
+// Always initialize payment if CARD or BANK_TRANSFER
+if (["CARD", "BANK_TRANSFER"].includes(paymentInput.method)) {
+  if (paymentInput.gateway === "PAYSTACK") {
+    paymentInitResponse = await initPaystackPayment({
+      amount: totals.grandTotal,
+      email: user.email,
+      name: payload.userName || user.fullName || "Customer",
+      phone: user.phone,
+      orderId,
+    });
+
+    paymentData.transactionId = paymentInitResponse.reference;
+    paymentData.checkoutUrl = paymentInitResponse.authorization_url;
+  } else {
+    paymentInitResponse = await initMonnifyPayment({
+      amount: totals.grandTotal,
+      customerName: payload.userName || user.fullName || "Customer",
+      customerEmail: user.email,
+      customerPhone: user.phone,
+      orderId,
+      paymentMethod:
+        paymentInput.method === "CARD" ? "CARD" : "ACCOUNT_TRANSFER",
+    });
+
+    paymentData.transactionId =
+      paymentInitResponse.reference || paymentInitResponse.transactionReference;
+    paymentData.checkoutUrl =
+      paymentInitResponse.checkoutUrl || paymentInitResponse.authorization_url;
+  }
+}
+
+// 💰 Installment validation
+if (paymentInput.mode === "INSTALLMENT" && paymentInput.installments) {
+  paymentData.installments = paymentInput.installments.map(i => ({
+    dueDate: i.dueDate,
+    amount: i.amount,
+    status: "PENDING",
+  }));
+
+  const totalInstallments = paymentData.installments.reduce((s, i) => s + i.amount, 0);
+  if (totalInstallments !== totals.grandTotal) {
+    return res
+      .status(400)
+      .json({ message: "Installment amounts must equal grand total" });
+  }
+}
+
+      // 🧾 10. Create the order (inside transaction)
       const order = await Order.create(
         [
           {
             _id: tempId,
             user: user._id,
-            userPhone: user.phone,
+            userPhone,
             userName: payload.userName || user.fullName,
             items: payload.items,
             notes: payload.notes,
@@ -521,13 +262,13 @@ export const createOrder = async (req, res, next) => {
 
       const orderDoc = order[0];
 
-      // 🎟️ 12. Handle coupon usage
+      // 🎟️ 11. Handle coupon increment
       if (couponCode) {
         const coupon = await Coupon.findOne({ code: couponCode }).session(session);
         if (coupon) {
           coupon.uses += 1;
           coupon.redemptions.push({
-            userPhone: user.phone,
+            userPhone,
             orderId: orderDoc._id,
             redeemedAt: DateTime.now().setZone("Africa/Lagos").toJSDate(),
           });
@@ -535,59 +276,47 @@ export const createOrder = async (req, res, next) => {
         }
       }
 
-      // 🔁 13. Update subscription usage
+      // 🔁 12. Update subscription usage (if applicable)
       if (usage) {
         usage.items_used =
-          (usage.items_used || 0) + payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
+          (usage.items_used || 0) +
+          payload.items.reduce((s, i) => s + (i.quantity || 1), 0);
         await usage.save({ session });
       }
-
-      // ✅ 14. Commit transaction BEFORE hitting Paystack
-      await session.commitTransaction();
-      session.endSession();
-
-      // 💳 15. Initialize Paystack payment (outside transaction)
-      let paymentInitResponse = null;
-
-      if (paymentInput.gateway === "PAYSTACK" && ["CARD", "BANK_TRANSFER"].includes(paymentInput.method)) {
-        paymentInitResponse = await initPaystackPayment({
-          amount: totals.grandTotal,
-          email: user.email,
-          name: payload.userName || user.fullName || "Customer",
-          phone: user.phone,
-          orderId,
-        });
-
-        await Order.findByIdAndUpdate(orderDoc._id, {
-          "payment.transactionId": paymentInitResponse.reference,
-          "payment.checkoutUrl": paymentInitResponse.authorization_url,
-        });
-      } else if (paymentInput.gateway === "MONNIFY") {
-        const monnifyInit = await initMonnifyPayment({
-          amount: totals.grandTotal,
-          customerName: payload.userName || user.fullName || "Customer",
-          customerEmail: user.email,
-          customerPhone: user.phone,
-          orderId,
-          paymentMethod: paymentInput.method === "CARD" ? "CARD" : "ACCOUNT_TRANSFER",
-        });
-
-        await Order.findByIdAndUpdate(orderDoc._id, {
-          "payment.transactionId": monnifyInit.reference || monnifyInit.transactionReference,
-          "payment.checkoutUrl": monnifyInit.checkoutUrl || monnifyInit.authorization_url,
-        });
-
-        paymentInitResponse = monnifyInit;
-      }
-
-      // 🔔 16. Send notifications (non-blocking)
-      notifyOrderEvent({
+      console.log("💳 Paystack init reference:", paymentInitResponse.reference);
+      console.log("💳 Monnify init reference:", paymentInitResponse.transactionReference) ;
+     // 🔔 13. Notifications (fail silently, non-blocking)
+const notifyTasks = [
+  // User: order created
+  (async () => {
+    try {
+      await notifyOrderEvent({
         user,
         order: orderDoc,
         type: "orderCreated",
-        meta: { deliveryPin },
-      }).catch(err => console.warn("User notification failed:", err.message));
+      });
+    } catch (err) {
+      console.warn("User orderCreated notification failed:", err.message);
+    }
+  })(),
 
+  // User: delivery PIN
+  (async () => {
+    try {
+      await notifyOrderEvent({
+        user,
+        order: orderDoc,
+        type: "deliveryPin",
+        extra: { pin: deliveryPin },
+      });
+    } catch (err) {
+      console.warn("User deliveryPin notification failed:", err.message);
+    }
+  })(),
+
+  // Admins: order created
+  (async () => {
+    try {
       const admins = await User.find({ role: "admin" });
       await Promise.all(
         admins.map(admin =>
@@ -595,12 +324,23 @@ export const createOrder = async (req, res, next) => {
             user: admin,
             order: orderDoc,
             type: "orderCreatedForAdmin",
-            meta: { deliveryPin },
+            extra: { pin: deliveryPin }, // optional, you can include PIN for admins too
           })
         )
-      ).catch(err => console.warn("Admin notifications failed:", err.message));
+      );
+    } catch (err) {
+      console.warn("Admin notification failed:", err.message);
+    }
+  })()
+];
 
-      // ✅ 17. Return success response
+await Promise.all(notifyTasks);
+
+      // ✅ 14. Commit transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      // ✅ Response
       return res.status(201).json({
         order: orderDoc,
         paymentInitResponse,
@@ -620,7 +360,7 @@ export const createOrder = async (req, res, next) => {
         continue;
       }
 
-      console.error("❌ Create order failed:", err);
+      console.error("Create order failed:", err);
       return next(err);
     }
   }
@@ -776,12 +516,13 @@ export const trackOrderPublic = async (req, res, next) => {
   }
 }
 
-export async function getOrderReceipt(req, res) {
+export async function getOrderReceipt (req, res) {
   try {
-    const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
+    const order = await Order.findOne({ orderId: req.params.orderId }).populate(
+      'user'
+    )
 
-    if (!order)
-      return res.status(404).json({ message: 'Order not found' })
+    if (!order) return res.status(404).json({ message: 'Order not found' })
 
     if (order.user._id.toString() !== req.user._id.toString())
       return res.status(403).json({ message: 'Unauthorized' })
