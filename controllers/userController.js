@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import bcrypt from 'bcryptjs'
 import { resolveZone } from "../utils/addressChecker.js";
 import { DateTime } from 'luxon';
+import { uploadToCloudinary } from "../middlewares/uploadMiddleware.js";
 
 
 export const getProfile = async (req, res) => {
@@ -270,3 +271,37 @@ export const getReferralInfo = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch referral info' })
   }
 }
+
+export const updatePhotoUrl = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.params.id; // from auth or param
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ message: "No image file uploaded" });
+    }
+
+    // Upload to Cloudinary
+    const result = await uploadToCloudinary(file.buffer, "user_photos");
+
+    // Update user photoUrl
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { photoUrl: result.secure_url },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "Profile photo updated successfully",
+      photoUrl: user.photoUrl,
+      user,
+    });
+  } catch (err) {
+    console.error("Error updating photo:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
