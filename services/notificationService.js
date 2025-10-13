@@ -6,16 +6,32 @@ dotenv.config()
 
 const TERMII_BASE_URL = 'https://api.ng.termii.com/api/sms/send';
 
+// Normalize phone to E.164 format for Nigeria (+234)
+const normalizePhone = phone => {
+  if (!phone) return null
+  let normalized = phone.trim()
+  if (normalized.startsWith('0')) {
+    return `+234${normalized.slice(1)}`
+  }
+  if (normalized.startsWith('+234')) {
+    return normalized
+  }
+  throw new Error('Invalid phone number format')
+}
+
 // --- Send OTP via Termii ---
 // const TERMII_SMS_URL = "https://v3.api.termii.com/api/sms/send";
 
 export async function sendSMS(to, message) {
   try {
+    // ✅ Normalize Nigerian phone numbers automatically
+    const formattedTo = normalizePhone(to);
+
     const response = await axios.post(
       TERMII_BASE_URL,
       {
         api_key: process.env.TERMII_API_KEY,
-        to,
+        to: formattedTo,
         from: process.env.TERMII_SENDER_ID,
         sms: message,
         type: "plain",
@@ -23,6 +39,7 @@ export async function sendSMS(to, message) {
       },
       { headers: { "Content-Type": "application/json" } }
     );
+
     return response.data;
   } catch (err) {
     if (err.response) {
@@ -37,6 +54,7 @@ export async function sendSMS(to, message) {
     throw new Error("Failed to send SMS");
   }
 }
+
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
