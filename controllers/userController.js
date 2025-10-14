@@ -111,6 +111,37 @@ export const updateAddress = async (req, res, next) => {
   }
 }
 
+export const deleteAddress = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || req.params.id;
+    const addressId = req.params.addressId;
+
+    // ✅ Find the user properly
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ✅ Find the address subdocument
+    const address = user.addresses.id(addressId);
+    if (!address) {
+      return res.status(404).json({ message: 'Address not found' });
+    }
+
+    // ✅ Remove the address
+    address.remove();
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Address deleted successfully',
+      addresses: user.addresses // optional: return updated list
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getAddresses = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select('addresses')

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { changePassword, getAddresses, getProfile, getReferralInfo, joinMembership, leaveMembership, saveAddress, updateAddress, updatePreferences, updateProfile } from "../controllers/userController.js";
+import { changePassword, deleteAddress, getAddresses, getProfile, getReferralInfo, joinMembership, leaveMembership, saveAddress, updateAddress, updatePreferences, updateProfile } from "../controllers/userController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { saveAddressSchema } from "../utils/validator.js";
@@ -14,6 +14,7 @@ router.put("/me/password", requireAuth, changePassword);
 router.put("/me/profile",  requireAuth, upload.single("photo"), updateProfile);
 router.post("/me/addresses", requireAuth, validateBody(saveAddressSchema), saveAddress);
 router.put("/me/addresses/:addressId", requireAuth, validateBody(saveAddressSchema), updateAddress);
+router.delete("/me/addresses/:addressId", requireAuth, deleteAddress);
 router.get("/me/addresses", requireAuth, getAddresses);
 // Route to join membership
 router.post('/membership/join', requireAuth, joinMembership);
