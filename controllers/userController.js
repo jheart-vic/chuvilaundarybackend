@@ -4,6 +4,10 @@ import { resolveZone } from '../utils/addressChecker.js'
 import { DateTime } from 'luxon'
 import { uploadToCloudinary } from '../middlewares/uploadMiddleware.js'
 
+// file validation config
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
+
 export const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -145,8 +149,6 @@ export const deleteAddress = async (req, res, next) => {
   }
 };
 
-
-
 export const getAddresses = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select('addresses')
@@ -241,36 +243,67 @@ export const leaveMembership = async (req, res, next) => {
 
 export const updateProfile = async (req, res, next) => {
   try {
-    const userId = req.user?._id || req.params.id;
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     // Find user
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // ✅ Only allow these fields
-    const allowedFields = ["fullName", "phone", "gender"];
+    // Allowed fields from body
+    const allowedFields = ["fullName", "phone",];
     const updates = {};
 
-    // Copy allowed fields from request body
     for (const key of allowedFields) {
-      if (req.body[key] !== undefined) {
-        updates[key] = req.body[key];
-      }
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
 
-    // ✅ Handle photo upload (if provided)
+    // Handle file upload if provided
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, "user_photos");
+      // Basic file validation
+      if (!ALLOWED_MIMES.includes(req.file.mimetype)) {
+        return res.status(400).json({ message: "Invalid file type" });
+      }
+      if (req.file.size > MAX_FILE_BYTES) {
+        return res.status(400).json({ message: "File too large (max 5MB)" });
+      }
+
+      // Upload
+      let result;
+      try {
+        result = await uploadToCloudinary(req.file.buffer, "user_photos");
+      } catch (uploadErr) {
+        console.error("Cloudinary upload error:", uploadErr);
+        return res.status(502).json({ message: "Failed to upload image", error: uploadErr.message });
+      }
+
+      if (!result || !result.secure_url) {
+        return res.status(502).json({ message: "Invalid upload result from Cloudinary" });
+      }
+
+      // Delete old image (if we have stored public_id)
+      if (user.photoPublicId) {
+        try {
+          // cloudinary.uploader.destroy returns an object; ignore result but log if error
+          await cloudinary.uploader.destroy(user.photoPublicId);
+        } catch (delErr) {
+          // log but don't fail the whole request — deletion can be retried/handled separately
+          console.error("Cloudinary delete error (non-fatal):", delErr);
+        }
+      }
+
+      // Save new image info
       updates.photoUrl = result.secure_url;
+      updates.photoPublicId = result.public_id;
     }
 
-    // ✅ Apply updates safely
+    // Apply updates and save
     Object.assign(user, updates);
     await user.save();
 
-    // ✅ Return updated user (excluding password)
     const userObj = user.toObject();
     delete userObj.password;
+    // optionally delete other sensitive props if any
 
     res.json({
       message: "Profile updated successfully",

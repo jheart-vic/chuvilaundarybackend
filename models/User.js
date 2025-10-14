@@ -26,6 +26,7 @@ const UserSchema = new mongoose.Schema({
   },
   gender: { type: String, enum: ['male', 'female', 'other', null], default: null },
   photoUrl:{ type: String, default: null },
+  photoPublicId:{ type: String, default: null },
   defaultPassword: { type: String, select: false },
   membershipStartedAt: Date,
   addresses: [AddressSchema],
