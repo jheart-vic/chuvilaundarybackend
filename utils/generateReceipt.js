@@ -8,34 +8,47 @@ export async function generateReceipt(order) {
   const { height } = page.getSize()
   const font = await pdf.embedFont(StandardFonts.Helvetica)
 
+  // 🔧 Helper to replace unsupported symbols (like ₦) with NGN
+  const safeText = text => String(text).replace(/₦/g, 'NGN ')
+
   const drawText = (text, x, y, size = 12) => {
-    page.drawText(text, { x, y: height - y, size, font, color: rgb(0, 0, 0) })
+    page.drawText(safeText(text), {
+      x,
+      y: height - y,
+      size,
+      font,
+      color: rgb(0, 0, 0),
+    })
   }
 
+  // --- Header ---
   drawText('e-Receipt', 250, 50, 18)
   drawText(`Order ID: ${order.orderId}`, 50, 100)
   drawText(`Customer: ${order.userName}`, 50, 130)
   drawText(`Date: ${new Date(order.createdAt).toLocaleString()}`, 50, 160)
-  drawText(`Amount Paid: ₦${order.totals.grandTotal.toLocaleString()}`, 50, 190)
+  drawText(`Amount Paid: NGN ${order.totals.grandTotal.toLocaleString()}`, 50, 190)
   drawText(`Payment Method: ${order.payment.gateway} (${order.payment.method})`, 50, 220)
   drawText(`Status: ${order.payment.status}`, 50, 250)
 
+  // --- Items ---
   let y = 300
   drawText('Items:', 50, y)
   order.items.forEach(item => {
     y += 30
-    drawText(`${item.quantity}x ${item.serviceName} — ₦${item.price}`, 70, y)
+    drawText(`${item.quantity}x ${item.serviceName} — NGN ${item.price}`, 70, y)
   })
 
+  // --- Totals ---
   y += 50
-  drawText(`Subtotal: ₦${order.totals.itemsTotal}`, 50, y)
+  drawText(`Subtotal: NGN ${order.totals.itemsTotal}`, 50, y)
   y += 20
-  drawText(`Discount: ₦${order.totals.discount || 0}`, 50, y)
+  drawText(`Discount: NGN ${order.totals.discount || 0}`, 50, y)
   y += 20
-  drawText(`Delivery: ₦${order.totals.deliveryFee}`, 50, y)
+  drawText(`Delivery: NGN ${order.totals.deliveryFee}`, 50, y)
   y += 20
-  drawText(`Grand Total: ₦${order.totals.grandTotal}`, 50, y)
+  drawText(`Grand Total: NGN ${order.totals.grandTotal}`, 50, y)
 
+  // --- Save PDF ---
   const receiptPath = path.join('/mnt/data', `receipt-${order._id}.pdf`)
   const pdfBytes = await pdf.save()
   fs.writeFileSync(receiptPath, pdfBytes)

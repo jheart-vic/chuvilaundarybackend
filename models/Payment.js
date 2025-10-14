@@ -13,7 +13,7 @@ const PaymentPlanSchema = new mongoose.Schema(
       enum: ['FULL', 'INSTALLMENT'],
       default: 'FULL'
     },
-  // ✅ Add this field
+    // ✅ Add this field
     status: {
       type: String,
       enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
@@ -34,6 +34,11 @@ const PaymentPlanSchema = new mongoose.Schema(
       type: String,
       default: null, // initially null, will be set when payment is initiated
       index: true // optional but helps with fast lookups in webhooks
+    },
+    lastTransactionId: {
+      type: String,
+      default: null,
+      index: true
     },
 
     // ⚙️ Gateway-specific identifiers
