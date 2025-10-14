@@ -18,7 +18,7 @@ export async function initPaystackPayment ({
       email,
       amount: amount * 100, // in kobo
       metadata: { name, phone, orderId },
-      callback_url: `${process.env.FRONTEND_URL}/payment/verify/${orderId}`
+      callback_url: `${process.env.FRONTEND_URL}/order-success/${orderId}`
     }
 
     const res = await axios.post(

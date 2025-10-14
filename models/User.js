@@ -42,6 +42,10 @@ const UserSchema = new mongoose.Schema({
     ref: 'Subscription',
     default: null
   },
+  hasUsedFirstOrderDiscount: {
+    type: Boolean,
+    default: false,
+  },
   referralCredits: { type: Number, default: 0 },
   isVerified: { type: Boolean, default: false },
   verificationCode: String,
