@@ -24,6 +24,7 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     default: null
   },
+  gender: { type: String, enum: ['male', 'female', 'other', null], default: null },
   photoUrl:{ type: String, default: null },
   defaultPassword: { type: String, select: false },
   membershipStartedAt: Date,
