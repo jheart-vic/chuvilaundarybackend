@@ -116,32 +116,35 @@ export const deleteAddress = async (req, res, next) => {
     const userId = req.user?._id;
     const addressId = req.params.addressId;
 
-    // Find the user
-    const user = await User.findById(userId);
-    if (!user) {
+    // Remove the address directly in MongoDB
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $pull: { addresses: { _id: addressId } } },
+      { new: true } // return the updated user
+    ).select("-password");
+
+    if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check if address exists
-    const address = user.addresses.id(addressId);
-    if (!address) {
+    // Check if the address still exists (means it wasn’t deleted)
+    const stillExists = updatedUser.addresses.some(
+      (addr) => addr._id.toString() === addressId
+    );
+    if (stillExists) {
       return res.status(404).json({ message: "Address not found" });
     }
-
-    // ✅ Use pull instead of remove
-    user.addresses.pull({ _id: addressId });
-
-    await user.save();
 
     res.json({
       success: true,
       message: "Address deleted successfully",
-      addresses: user.addresses,
+      addresses: updatedUser.addresses, // return the updated list
     });
   } catch (err) {
     next(err);
   }
 };
+
 
 
 export const getAddresses = async (req, res, next) => {
