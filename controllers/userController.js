@@ -5,8 +5,8 @@ import { DateTime } from 'luxon'
 import { uploadToCloudinary } from '../middlewares/uploadMiddleware.js'
 
 // file validation config
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB
-const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_FILE_BYTES = 5 * 1024 * 1024 // 5MB
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 
 export const getProfile = async (req, res) => {
   try {
@@ -117,37 +117,37 @@ export const updateAddress = async (req, res, next) => {
 
 export const deleteAddress = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
-    const addressId = req.params.addressId;
+    const userId = req.user?._id
+    const addressId = req.params.addressId
 
     // Remove the address directly in MongoDB
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $pull: { addresses: { _id: addressId } } },
       { new: true } // return the updated user
-    ).select("-password");
+    ).select('-password')
 
     if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' })
     }
 
     // Check if the address still exists (means it wasn’t deleted)
     const stillExists = updatedUser.addresses.some(
-      (addr) => addr._id.toString() === addressId
-    );
+      addr => addr._id.toString() === addressId
+    )
     if (stillExists) {
-      return res.status(404).json({ message: "Address not found" });
+      return res.status(404).json({ message: 'Address not found' })
     }
 
     res.json({
       success: true,
-      message: "Address deleted successfully",
-      addresses: updatedUser.addresses, // return the updated list
-    });
+      message: 'Address deleted successfully',
+      addresses: updatedUser.addresses // return the updated list
+    })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 export const getAddresses = async (req, res, next) => {
   try {
@@ -250,51 +250,14 @@ export const updateProfile = async (req, res, next) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Allowed fields from body
-    const allowedFields = ["fullName", "phone",];
+    // ✅ Only allow updating text fields (no photo)
+    const allowedFields = ["fullName", "phone"];
     const updates = {};
 
     for (const key of allowedFields) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
-    }
-
-    // Handle file upload if provided
-    if (req.file) {
-      // Basic file validation
-      if (!ALLOWED_MIMES.includes(req.file.mimetype)) {
-        return res.status(400).json({ message: "Invalid file type" });
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
       }
-      if (req.file.size > MAX_FILE_BYTES) {
-        return res.status(400).json({ message: "File too large (max 5MB)" });
-      }
-
-      // Upload
-      let result;
-      try {
-        result = await uploadToCloudinary(req.file.buffer, "user_photos");
-      } catch (uploadErr) {
-        console.error("Cloudinary upload error:", uploadErr);
-        return res.status(502).json({ message: "Failed to upload image", error: uploadErr.message });
-      }
-
-      if (!result || !result.secure_url) {
-        return res.status(502).json({ message: "Invalid upload result from Cloudinary" });
-      }
-
-      // Delete old image (if we have stored public_id)
-      if (user.photoPublicId) {
-        try {
-          // cloudinary.uploader.destroy returns an object; ignore result but log if error
-          await cloudinary.uploader.destroy(user.photoPublicId);
-        } catch (delErr) {
-          // log but don't fail the whole request — deletion can be retried/handled separately
-          console.error("Cloudinary delete error (non-fatal):", delErr);
-        }
-      }
-
-      // Save new image info
-      updates.photoUrl = result.secure_url;
-      updates.photoPublicId = result.public_id;
     }
 
     // Apply updates and save
@@ -303,7 +266,6 @@ export const updateProfile = async (req, res, next) => {
 
     const userObj = user.toObject();
     delete userObj.password;
-    // optionally delete other sensitive props if any
 
     res.json({
       message: "Profile updated successfully",
@@ -317,32 +279,41 @@ export const updateProfile = async (req, res, next) => {
 
 export const changePassword = async (req, res, next) => {
   try {
-    const { currentPassword, newPassword } = req.body
+    const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
       return res
         .status(400)
-        .json({ message: 'Both current and new password required' })
+        .json({ message: 'Both current and new passwords are required' });
     }
 
-    const user = await User.findById(req.user._id).select('+password')
-    if (!user) return res.status(404).json({ message: 'User not found' })
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const isMatch = await bcrypt.compare(currentPassword, user.password)
+    // ✅ Check if current password is correct
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch)
-      return res.status(400).json({ message: 'Current password is incorrect' })
+      return res.status(400).json({ message: 'Current password is incorrect' });
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10)
-    user.password = await bcrypt.hash(newPassword, salt)
+    // ✅ Prevent using the same password again
+    const isSameAsOld = await bcrypt.compare(newPassword, user.password);
+    if (isSameAsOld)
+      return res
+        .status(400)
+        .json({ message: 'New password must be different from the current password' });
 
-    await user.save()
+    // ✅ Hash and update new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
 
-    res.json({ message: 'Password updated successfully' })
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
+
 
 export const getReferralInfo = async (req, res) => {
   try {
@@ -395,30 +366,45 @@ export const getReferralInfo = async (req, res) => {
 //   }
 // }
 
-// export const updateGender = async (req, res) => {
-//   try {
-//     const { gender } = req.body;
-//     const userId = req.user?._id || req.params.id;
+export const updatePhotoUrl = async (req, res) => {
+  try {
+    // || req.params.id; // from auth or param
+    const userId = req.user?._id
+    const file = req.file;
 
-//     const user = await User.findByIdAndUpdate(
-//       userId,
-//       { gender },
-//       { new: true }
-//     ).select('-password');
+    if (!file) {
+      return res.status(400).json({ message: "No image file uploaded" });
+    }
 
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
+    // Basic file validation
+    if (!ALLOWED_MIMES.includes(file.mimetype)) {
+      return res.status(400).json({ message: "Invalid file type" });
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      return res.status(400).json({ message: "File too large (max 5MB)" });
+    }
 
-//     res.json({
-//       message: 'Gender updated successfully',
-//       user
-//     });
-//   } catch (err) {
-//     console.error('Error updating gender:', err);
-//     res.status(500).json({ message: 'Server error', error: err.message });
-//   }
-// };
+    // Upload to Cloudinary
+    const result = await uploadToCloudinary(file.buffer, "user_photos");
 
+    // Update user photoUrl
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { photoUrl: result.secure_url },
+      { new: true }
+    ).select("-password");
 
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
+    res.json({
+      message: "Profile photo updated successfully",
+      photoUrl: user.photoUrl,
+      user,
+    });
+  } catch (err) {
+    console.error("Error updating photo:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};

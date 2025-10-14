@@ -57,7 +57,7 @@ export const register = async (req, res) => {
       });
     }
 
-    const { fullName, phone, email, password, referredBy } = value;
+    const { fullName, phone, email, password, referredBy, gender } = value;
 
     // ✅ Normalize phone number
     const normalizedPhone = normalizePhone(phone);
@@ -99,6 +99,7 @@ export const register = async (req, res) => {
       email,
       password: hashedPassword,
       referralCode: userReferralCode,
+      gender,
       referredBy: inviter?._id || null,
       verificationCode,
       verificationCodeExpires
@@ -138,6 +139,7 @@ export const register = async (req, res) => {
         fullName: newUser.fullName,
         phone: newUser.phone,
         email: newUser.email,
+        gender,
         referralCode: newUser.referralCode,
         referredBy: newUser.referredBy,
         isVerified: newUser.isVerified,

@@ -8,7 +8,9 @@ export async function createReview(req, res, next) {
     const { rating, comment, orderId } = req.body;
 
     // Find order by orderId (not _id)
-    const foundOrder = await Order.findOne({ orderId });
+   console.log('🔍 Debug orderId received:', orderId);
+const foundOrder = await Order.findOne({ orderId })
+
     if (!foundOrder) {
       return res.status(404).json({
         success: false,
@@ -25,24 +27,24 @@ export async function createReview(req, res, next) {
     }
 
     // Ensure order is delivered before allowing review
-    if (foundOrder.status !== 'Delivered') {
-      return res.status(400).json({
-        success: false,
-        message: 'You can only review delivered orders'
-      });
-    }
+    // if (foundOrder.status !== 'Delivered') {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'You can only review delivered orders'
+    //   });
+    // }
 
     // Prevent duplicate reviews for the same order
-    const existing = await Review.findOne({
-      user: req.user._id,
-      order: foundOrder._id
-    });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: 'Order already reviewed'
-      });
-    }
+    // const existing = await Review.findOne({
+    //   user: req.user._id,
+    //   order: foundOrder._id
+    // });
+    // if (existing) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Order already reviewed'
+    //   });
+    // }
 
     // Create new review
     const review = await Review.create({
