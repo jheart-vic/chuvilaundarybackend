@@ -13,6 +13,7 @@ import { errorHandler } from "./middlewares/erroHandler.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
+import { startReminderJobs } from "./jobs/reminderJob.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,6 +83,12 @@ io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
   socket.on("disconnect", () => console.log("🔴 Client disconnected:", socket.id));
 });
+
+// ✅ Start cron scheduler when server boots (only in production)
+if (process.env.NODE_ENV === "production") {
+  startReminderJobs();
+  console.log("⏰ Reminder job scheduler started...");
+}
 
 // Connect DB and start server
 const PORT = process.env.PORT || 4000;

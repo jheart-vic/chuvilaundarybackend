@@ -93,6 +93,8 @@ export async function notifyOrderEvent({ user, order, type, extra = {}, attachme
     rescheduled: "Dear {{name}}, due to {{reason}}, your delivery is rescheduled to {{new_window}}. Thank you for your patience. – Chuvilaundry.",
     feedback: "Dear {{name}}, how did we do? Rate your laundry service: {{feedback_link}}. Powered by Chuvilaundry.",
     pickupReminder: "Reminder: Your laundry pickup is in 1 hour. Please have your items ready. – Chuvilaundry.",
+    deliveryOnTheWay: "Good news! Your laundry is out for delivery and will arrive within the next hour. – Chuvilaundry.",
+    deliveryReminder: "Reminder: Your laundry delivery will arrive in 1 hour. Please ensure someone is available to receive it. – Chuvilaundry.",
     processing: "Dear {{name}}, your laundry is now being processed. We’ll notify you when it’s ready. – Chuvilaundry.",
     complaintReceived: "Dear {{name}}, we’ve received your complaint and are working on it. Resolution update coming soon. – Chuvilaundry.",
     orderCreatedForAdmin: "New order received. Order ID: {{orderId}}, Pickup: {{window}}. Customer: {{name}}. Delivery PIN: {{pin}}",
