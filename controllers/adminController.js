@@ -352,25 +352,38 @@ export const deleteCoupon = async (req, res, next) => {
 // Admin cancels any order
 export const cancelOrderAdmin = async (req, res, next) => {
   try {
+    // 1️⃣ Find order by orderId
     const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
-    if (!order) return res.status(404).json({ message: 'order not found' })
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' })
+    }
 
+    // 2️⃣ Ensure req.body exists before accessing properties
+    const note = (req.body && req.body.note) ? req.body.note.trim() : 'Cancelled by admin'
+
+    // 3️⃣ Update status & history
     order.status = 'Cancelled'
     order.history.push({
       status: 'Cancelled',
-      note: req.body.note || 'Cancelled by admin'
+      note
     })
 
+    // 4️⃣ Save order
     await order.save()
 
-    // 🔔 Notify
+    // 5️⃣ Send cancellation notification
     await notifyOrderEvent({
       user: order.user,
       order,
       type: 'cancelled_admin'
     })
 
-    res.json(order)
+    // 6️⃣ Return response
+    res.json({
+      success: true,
+      message: 'Order cancelled successfully by admin',
+      order
+    })
   } catch (err) {
     next(err)
   }

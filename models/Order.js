@@ -22,7 +22,7 @@ export const Statuses = [
   'Picked Up',
   'In Cleaning',
   'Ready',
-  'Out for Delivery',
+  'Out For Delivery',
   'Delivered',
   'Cancelled'
 ]
