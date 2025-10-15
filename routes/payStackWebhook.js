@@ -132,7 +132,7 @@ router.post('/webhook/paystack', async (req, res) => {
                   order,
                   attachmentPath: receiptPath,
                   type: success
-                    ? 'orderCreatedForAdmin'
+                    ? 'orderBookedForAdmin'
                     : 'payment_failed_forAdmin'
                 })
               )

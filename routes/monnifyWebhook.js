@@ -113,7 +113,7 @@ router.post("/webhook/monnify", async (req, res) => {
           user: process.env.ADMIN_USER_ID,
           order,
           attachmentPath: receiptPath,
-          type: success ? "orderCreatedForAdmin" : "payment_failed_forAdmin",
+          type: success ? "orderBookedForAdmin" : "payment_failed_forAdmin",
         });
 
       console.log(

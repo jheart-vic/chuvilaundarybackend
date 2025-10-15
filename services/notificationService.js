@@ -95,10 +95,13 @@ export async function notifyOrderEvent({ user, order, type, extra = {}, attachme
     pickupReminder: "Reminder: Your laundry pickup is in 1 hour. Please have your items ready. – Chuvilaundry.",
     processing: "Dear {{name}}, your laundry is now being processed. We’ll notify you when it’s ready. – Chuvilaundry.",
     complaintReceived: "Dear {{name}}, we’ve received your complaint and are working on it. Resolution update coming soon. – Chuvilaundry.",
-    orderCreatedForAdmin: "New order received. Order ID: {{orderId}}, Pickup: {{window}}. Customer: {{name}}.",
+    orderCreatedForAdmin: "New order received. Order ID: {{orderId}}, Pickup: {{window}}. Customer: {{name}}. Delivery PIN: {{pin}}",
+    orderBookedForAdmin: `🧾 New Order Booked! Order ID: {{orderId}} Customer: {{name}} Phone: {{phone}} Pickup Date: {{pickupDate}} ({{pickupWindow}}) Delivery Date: {{deliveryDate}} ({{deliveryWindow}}) Service Tier: {{tier}} Delivery PIN: {{pin}} Total Amount: ₦{{amount}} Please log in to the admin dashboard to view full order details.`,
+
     // ✅ Payment events
     payment_success: "Dear {{name}}, your payment of ₦{{amount}} via {{method}} was successful. Thank you for using Chuvilaundry.",
     payment_failed: "Dear {{name}}, your payment attempt of ₦{{amount}} via {{method}} has failed. Please try again or contact support. hello@chuvilaundry.com",
+    payment_failed_forAdmin: `⚠️ Payment Failed Alert! Order ID: {{orderId}}, Customer: {{name}}, Phone: {{phone}}, Email: {{email}}, Amount: ₦{{amount}}, Payment Method: {{method}}, Gateway: {{gateway}}, Reference: {{transactionId}}, Reason: {{reason}}. Please check the admin dashboard or payment gateway for more details.`,
 
   // ✅ Cancellation events
     cancelled_admin: "Dear {{name}}, your laundry order was cancelled by Chuvilaundry support. Please contact us if you need further assistance. hello@chuvilaundry.com",
