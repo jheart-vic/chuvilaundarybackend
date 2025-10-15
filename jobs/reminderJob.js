@@ -1,7 +1,8 @@
 import cron from 'node-cron'
 import Order from '../models/Order.js'
-import { notifyOrderEvent } from '../services/notification.service.js'
+
 import { DateTime } from 'luxon'
+import { notifyOrderEvent } from '../services/notificationService.js'
 
 export function startReminderJobs () {
   // Run every 15 minutes
