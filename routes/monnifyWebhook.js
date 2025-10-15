@@ -127,7 +127,7 @@ router.post("/webhook/monnify", async (req, res) => {
 
     // === 🧠 Idempotency check for Subscriptions ===
     const existingSub = await Subscription.findOne({
-      "paymentPlan.lastTransactionId": transactionReference,
+      "payment.lastTransactionId": transactionReference,
     });
     if (existingSub) {
       console.log("♻️ Duplicate webhook ignored for Subscription:", existingSub._id);
@@ -148,10 +148,11 @@ router.post("/webhook/monnify", async (req, res) => {
       const now = DateTime.now().setZone("Africa/Lagos");
 
       if (success) {
-        subscription.paymentPlan.lastTransactionId = transactionReference;
-        subscription.paymentPlan.amountPaid += paidAmount;
-        subscription.paymentPlan.balance = 0;
-        subscription.paymentPlan.failedAttempts = 0;
+      subscription.payment.status = 'PAID';
+        subscription.payment.lastTransactionId = transactionReference;
+        subscription.payment.amountPaid += paidAmount;
+        subscription.payment.balance = 0;
+        subscription.payment.failedAttempts = 0;
 
         subscription.status = "ACTIVE";
 
@@ -189,8 +190,9 @@ router.post("/webhook/monnify", async (req, res) => {
 
         console.log(`✅ Subscription active or renewed: ${subscription._id}`);
       } else {
-        subscription.paymentPlan.failedAttempts += 1;
-        if (subscription.paymentPlan.failedAttempts >= 3) {
+        subscription.payment.status = 'FAILED';
+        subscription.payment.failedAttempts += 1;
+        if (subscription.payment.failedAttempts >= 3) {
           subscription.status = "PAUSED";
           console.warn(`⚠️ Subscription auto-paused after 3 failures: ${subscription._id}`);
         }

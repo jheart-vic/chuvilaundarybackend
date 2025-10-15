@@ -180,6 +180,7 @@ router.post('/webhook/paystack', async (req, res) => {
       const now = DateTime.now().setZone('Africa/Lagos')
 
       if (success) {
+        subscription.payment.status = 'PAID';
         subscription.payment.lastTransactionId = reference
         subscription.payment.amountPaid += amount
         subscription.payment.balance = 0
@@ -220,6 +221,7 @@ router.post('/webhook/paystack', async (req, res) => {
 
         console.log(`✅ Subscription activated or renewed: ${subscription._id}`)
       } else {
+        subscription.payment.status = 'FAILED';
         subscription.payment.failedAttempts += 1
         if (subscription.payment.failedAttempts >= 3) {
           subscription.status = 'PAUSED'
