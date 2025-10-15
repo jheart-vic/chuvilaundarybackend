@@ -27,6 +27,6 @@ router.get("/track/:orderId", trackOrderPublic); // 👈 Public tracking endpoin
 
 router.post('/preview', requireAuth, previewOrder)
 
-router.get('/orders/:orderId/receipt', requireAuth, getOrderReceipt)
+router.get('/:orderId/receipt', requireAuth, getOrderReceipt)
 
 export default router;

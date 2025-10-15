@@ -13,6 +13,7 @@ import SubUsage from '../models/SubUsage.js'
 import { DateTime } from 'luxon'
 import { initMonnifyPayment } from '../utils/monnify.js'
 import { initPaystackPayment } from '../utils/paystack.js'
+import { generateReceipt } from'../utils/generateReceipt.js'
 
 const generateDeliveryPin = () =>
   Math.floor(1000 + Math.random() * 9000).toString()
@@ -478,7 +479,7 @@ export const updateOrderStatus = async (req, res, next) => {
 
 export const cancelOrderUser = async (req, res, next) => {
   try {
-    const order = await Order.findOne({ orderId: req.params.id }).populate(
+     const order = await Order.findOne({ orderId: req.params.orderId }).populate(
       'user'
     )
     if (!order) {

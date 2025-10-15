@@ -51,7 +51,7 @@ router.delete("/service-pricings/:id", requireAuth, requireAdmin, deletePricing)
 router.get("/orders", requireAuth, requireEmployeeOrAdmin, listAllOrders)
 router.get("/orders/total", requireAuth, requireAdmin, getTotalOrders)
 router.patch("/orders/:id/status", requireAuth, requireEmployeeOrAdmin, validateBody(updateStatusSchema), updateOrderStatus)
-router.patch("/orders/:id/cancel", requireAuth, requireEmployeeOrAdmin, cancelOrderAdmin)
+router.patch("/orders/:orderId/cancel", requireAuth, requireEmployeeOrAdmin, cancelOrderAdmin)
 
 // Subscription Plan routes
 router.post("/plans", requireAuth, requireAdmin, createPlan);

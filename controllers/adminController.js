@@ -352,7 +352,7 @@ export const deleteCoupon = async (req, res, next) => {
 // Admin cancels any order
 export const cancelOrderAdmin = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id).populate('user')
+    const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
     if (!order) return res.status(404).json({ message: 'order not found' })
 
     order.status = 'Cancelled'
