@@ -5,15 +5,6 @@ import mongoose from 'mongoose';
 // User creates a review for an order
 export async function createReview(req, res, next) {
   try {
-    // 1️⃣ Validate input
-    const { error, value } = reviewSchema.validate(req.body);
-    if (error) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Validation failed',
-        details: error.details
-      });
-    }
 
     const { rating, comment, orderId } = value;
 
