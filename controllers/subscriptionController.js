@@ -10,100 +10,10 @@ import User from '../models/User.js'
 /**
  *  - Creates a PENDING subscription
  */
-// export const subscribe = async (req, res, next) => {
-//   try {
-//     const userId = req.user._id
-//     const { planCode } = req.body
-
-//     // 🔍 Find subscription plan
-//     const plan = await SubscriptionPlan.findOne({ code: planCode })
-//     if (!plan) return res.status(404).json({ message: 'Plan not found' })
-
-//     // ❌ Prevent duplicate active plan
-//     const existing = await Subscription.findOne({
-//       customer: userId,
-//       plan_code: planCode,
-//       status: 'ACTIVE'
-//     })
-//     if (existing)
-//       return res
-//         .status(400)
-//         .json({ message: 'You already have this plan active' })
-
-//     // 🧹 Cancel other active subs
-//     await Subscription.updateMany(
-//       { customer: userId, status: 'ACTIVE' },
-//       {
-//         $set: {
-//           status: 'CANCELLED',
-//           ended_at: DateTime.now().setZone('Africa/Lagos').toJSDate(),
-//           cancelled_reason: 'New plan subscribed'
-//         }
-//       }
-//     )
-
-//     // 🕓 Create new pending subscription
-//     const now = DateTime.now().setZone('Africa/Lagos')
-//     const subscription = await Subscription.create({
-//       customer: userId,
-//       plan_code: plan.code,
-//       plan: plan._id,
-//       status: 'PENDING',
-//       start_date: now.toJSDate(),
-//       period_start: now.toJSDate(),
-//       period_end: now.plus({ months: 1 }).toJSDate(),
-//       renewal_date: now.plus({ months: 1 }).toJSDate()
-//     })
-
-//     let paymentInitResponse
-
-//     if (req.body.gateway === 'PAYSTACK') {
-//       paymentInitResponse = await initPaystackPayment({
-//         amount: plan.price_ngn,
-//         email: req.user.email,
-//         name: req.user.name,
-//         phone: req.user.phone,
-//         orderId: subscription._id.toString()
-//       })
-//     } else {
-//       paymentInitResponse = await initMonnifyPayment({
-//         amount: plan.price_ngn,
-//         customerName: req.user.name,
-//         customerEmail: req.user.email,
-//         customerPhone: req.user.phone,
-//         orderId: subscription._id.toString(),
-//         paymentMethod: 'CARD'
-//       })
-//     }
-//     // ✅ Save payment plan under unified schema
-//     subscription.payment = {
-//       method: 'CARD',
-//       gateway: req.body.gateway || 'MONNIFY',
-//       transactionId:
-//         paymentInitResponse?.reference ||
-//         paymentInitResponse?.transactionReference,
-//       checkoutUrl:
-//         paymentInitResponse?.checkoutUrl ||
-//         paymentInitResponse?.authorization_url,
-//       amountPaid: 0,
-//       balance: plan.price_ngn
-//     }
-
-//     await subscription.save()
-
-//     res.status(201).json({
-//       message: 'Subscription created. Proceed to payment.',
-//       subscription,
-//       paymentLink: subscription.payment.checkoutUrl
-//     })
-//   } catch (err) {
-//     console.error('Subscribe error:', err)
-//     next(err)
-//   }
-// }
-
 export const subscribe = async (req, res, next) => {
   try {
+    const now = DateTime.now().setZone("Africa/Lagos");
+
     const userId = req.user._id;
     const { planCode, gateway } = req.body;
 
@@ -145,7 +55,6 @@ export const subscribe = async (req, res, next) => {
     const subId = `Chuvi-${planPrefix}-${datePart}-${randomPart}`;
 
     // 🕓 Create new pending subscription
-    const now = DateTime.now().setZone("Africa/Lagos");
     const subscription = await Subscription.create({
       subId,
       customer: userId,
