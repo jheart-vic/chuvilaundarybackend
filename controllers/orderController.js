@@ -13,7 +13,7 @@ import SubUsage from '../models/SubUsage.js'
 import { DateTime } from 'luxon'
 import { initMonnifyPayment } from '../utils/monnify.js'
 import { initPaystackPayment } from '../utils/paystack.js'
-import { generateReceipt } from'../utils/generateReceipt.js'
+import { generateReceipt } from '../utils/generateReceipt.js'
 
 const generateDeliveryPin = () =>
   Math.floor(1000 + Math.random() * 9000).toString()
@@ -253,6 +253,7 @@ export const createOrder = async (req, res, next) => {
             user: user._id,
             userPhone,
             userName: payload.userName || user.fullName,
+            userEmail: user.email,
             items: payload.items,
             notes: payload.notes,
             photos,
@@ -479,14 +480,18 @@ export const updateOrderStatus = async (req, res, next) => {
 
 export const cancelOrderUser = async (req, res, next) => {
   try {
-    const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
+    const order = await Order.findOne({ orderId: req.params.orderId }).populate(
+      'user'
+    )
     if (!order) {
       return res.status(404).json({ message: 'Order not found' })
     }
 
     // Ensure user owns the order
     if (order.user._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'You can only cancel your own orders' })
+      return res
+        .status(403)
+        .json({ message: 'You can only cancel your own orders' })
     }
 
     // Prevent cancelling twice or delivered
@@ -494,11 +499,13 @@ export const cancelOrderUser = async (req, res, next) => {
       return res.status(400).json({ message: 'Order already cancelled' })
     }
     if (order.status === 'Delivered') {
-      return res.status(400).json({ message: 'Delivered orders cannot be cancelled' })
+      return res
+        .status(400)
+        .json({ message: 'Delivered orders cannot be cancelled' })
     }
 
     // ✅ Safe extraction of reason
-    const { reason } =  req.body
+    const { reason } = req.body
 
     order.status = 'Cancelled'
     order.cancellationReason = reason
@@ -566,31 +573,45 @@ export const trackOrderPublic = async (req, res, next) => {
   }
 }
 
-export async function getOrderReceipt(req, res) {
+export async function getOrderReceipt (req, res) {
   try {
-    const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
-    if (!order) return res.status(404).json({ message: 'Order not found' })
+    const order = await Order.findOne({ orderId: req.params.orderId }).populate(
+      'user',
+      'email name'
+    )
 
+    if (!order) return res.status(404).json({ message: 'Order not found' })
+    const recipientEmail = order.userEmail || order.user?.email
+
+    if (!recipientEmail) {
+      console.warn(`⚠️ No email found for order ${order.orderId}`)
+      return res
+        .status(400)
+        .json({ message: 'No recipient email found for order' })
+    }
     if (order.user._id.toString() !== req.user._id.toString())
       return res.status(403).json({ message: 'Unauthorized' })
 
     const { receiptPath, base64 } = await generateReceipt(order)
 
     // ✉️ Email the receipt
-    await sendEmail({
-      to: order.user.email,
-      subject: `Your Receipt for Order ${order.orderId}`,
-      html: `<p>Hi ${order.userName},</p>
-             <p>Attached is your e-receipt for Order <strong>${order.orderId}</strong>.</p>
-             <p>Thank you for choosing us!</p>`,
-      attachments: [
+    await sendEmail(
+      recipientEmail,
+      `Your Receipt for Order ${order.orderId}`,
+      `
+    <p>Hi ${order.userName || order.user?.name || 'Customer'},</p>
+    <p>Attached is your e-receipt for <strong>Order #${
+      order.orderId
+    }</strong>.</p>
+  `,
+      [
         {
           filename: `receipt-${order.orderId}.pdf`,
           content: base64,
           encoding: 'base64'
         }
       ]
-    })
+    )
 
     // 📎 Also allow download directly
     res.sendFile(path.resolve(receiptPath))

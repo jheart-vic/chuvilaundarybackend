@@ -25,6 +25,7 @@ export async function generateReceipt(order) {
   drawText('e-Receipt', 250, 50, 18)
   drawText(`Order ID: ${order.orderId}`, 50, 100)
   drawText(`Customer: ${order.userName}`, 50, 130)
+  drawText(`Email ${order.userEmail}`)
   drawText(`Date: ${new Date(order.createdAt).toLocaleString()}`, 50, 160)
   drawText(`Amount Paid: NGN ${order.totals?.grandTotal?.toLocaleString()}`, 50, 190)
   drawText(`Payment Method: ${order.payment?.gateway || 'N/A'} (${order.payment?.method || 'N/A'})`, 50, 220)

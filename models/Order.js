@@ -36,6 +36,7 @@ const OrderSchema = new mongoose.Schema(
       unique: true,
       index: true
     },
+    userEmail: { type: String, lowercase: true, trim: true },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
