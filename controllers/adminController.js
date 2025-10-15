@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import Coupon from '../models/Coupon.js'
 import dotenv from 'dotenv'
+import { notifyOrderEvent } from '../services/notificationService.js'
 dotenv.config()
 
 const generateReferralCode = () => {
@@ -127,7 +128,6 @@ export const createEmployee = async (req, res, next) => {
     next(err)
   }
 }
-
 
 // Total employees
 export const getTotalEmployees = async (req, res, next) => {
