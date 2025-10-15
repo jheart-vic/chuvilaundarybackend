@@ -111,7 +111,9 @@ const OrderSchema = new mongoose.Schema(
       trim: true,
       maxlength: 500
     },
-
+    cancellationReason: { type: String },
+    cancelledBy: { type: String, enum: ['user', 'admin'], default: null },
+    cancelledAt: { type: Date },
     subscriptionPlanCode: { type: String }, // e.g. "PREM_CHOICE_24"
     slaHours: { type: Number },
     discount: { type: Number, default: 0 },

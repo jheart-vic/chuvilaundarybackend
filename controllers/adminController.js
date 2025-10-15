@@ -361,8 +361,12 @@ export const cancelOrderAdmin = async (req, res, next) => {
     // 2️⃣ Ensure req.body exists before accessing properties
     const note = (req.body && req.body.note) ? req.body.note.trim() : 'Cancelled by admin'
 
-    // 3️⃣ Update status & history
-    order.status = 'Cancelled'
+    // Update order
+    order.status = 'Cancelled';
+    order.cancellationReason = note;
+    order.cancelledBy = 'admin';
+    order.cancelledAt = new Date();
+
     order.history.push({
       status: 'Cancelled',
       note

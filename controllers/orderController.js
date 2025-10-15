@@ -506,10 +506,14 @@ export const cancelOrderUser = async (req, res, next) => {
     }
 
     // ✅ Safe extraction of reason
-    const { reason } = req.body
+    const reason  = req.body.reason?.trim() || 'Cancelled by user'
 
-    order.status = 'Cancelled'
-    order.cancellationReason = reason
+      // Update order
+    order.status = 'Cancelled';
+    order.cancellationReason = reason;
+    order.cancelledBy = 'user';
+    order.cancelledAt = new Date();
+
     order.history.push({
       status: 'Cancelled',
       note: reason
