@@ -6,7 +6,7 @@ import mongoose from 'mongoose';
 export async function createReview(req, res, next) {
   try {
 
-    const { rating, comment, orderId } = value;
+    const { rating, comment, orderId } = req.body;
 
     console.log('🔍 Debug orderId received:', orderId);
 
