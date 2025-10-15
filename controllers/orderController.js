@@ -2,7 +2,7 @@ import Order from '../models/Order.js'
 import Coupon from '../models/Coupon.js'
 import { uploadToCloudinary } from '../middlewares/uploadMiddleware.js'
 import { Statuses } from '../models/Order.js'
-import { notifyOrderEvent } from '../services/notificationService.js'
+import { notifyOrderEvent, sendEmail } from '../services/notificationService.js'
 import { computeOrderTotals } from '../utils/orderTotals.js'
 import { computeExpectedReadyAt } from '../utils/slaHours.js'
 import User from '../models/User.js'
@@ -566,18 +566,33 @@ export const trackOrderPublic = async (req, res, next) => {
   }
 }
 
-export async function getOrderReceipt (req, res) {
+export async function getOrderReceipt(req, res) {
   try {
-    const order = await Order.findOne({ orderId: req.params.orderId }).populate(
-      'user'
-    )
-
+    const order = await Order.findOne({ orderId: req.params.orderId }).populate('user')
     if (!order) return res.status(404).json({ message: 'Order not found' })
 
     if (order.user._id.toString() !== req.user._id.toString())
       return res.status(403).json({ message: 'Unauthorized' })
 
-    const receiptPath = await generateReceipt(order)
+    const { receiptPath, base64 } = await generateReceipt(order)
+
+    // ✉️ Email the receipt
+    await sendEmail({
+      to: order.user.email,
+      subject: `Your Receipt for Order ${order.orderId}`,
+      html: `<p>Hi ${order.userName},</p>
+             <p>Attached is your e-receipt for Order <strong>${order.orderId}</strong>.</p>
+             <p>Thank you for choosing us!</p>`,
+      attachments: [
+        {
+          filename: `receipt-${order.orderId}.pdf`,
+          content: base64,
+          encoding: 'base64'
+        }
+      ]
+    })
+
+    // 📎 Also allow download directly
     res.sendFile(path.resolve(receiptPath))
   } catch (err) {
     console.error('Receipt generation error:', err)
