@@ -1,24 +1,32 @@
-import mongoose from "mongoose";
-import PaymentPlanSchema from "./Payment.js";
+import mongoose from 'mongoose'
+import PaymentPlanSchema from './Payment.js'
 
 const subscriptionSchema = new mongoose.Schema(
   {
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
     plan_code: { type: String, required: true },
-    plan: { type: mongoose.Schema.Types.ObjectId, ref: "SubscriptionPlan" },
-
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionPlan' },
+    subId: {
+      type: String,
+      unique: true,
+      index: true
+    },
     status: {
       type: String,
       enum: [
-        "ACTIVE",
-        "PAUSED",
-        "CANCEL_AT_PERIOD_END",
-        "CANCELLED",
-        "PENDING",
-        "FAILED",
-        "AUTO_PAYMENT_CANCELLED",
+        'ACTIVE',
+        'PAUSED',
+        'CANCEL_AT_PERIOD_END',
+        'CANCELLED',
+        'PENDING',
+        'FAILED',
+        'AUTO_PAYMENT_CANCELLED'
       ],
-      default: "PENDING",
+      default: 'PENDING'
     },
 
     // ✅ Unified payment schema (Paystack + Monnify)
@@ -31,7 +39,7 @@ const subscriptionSchema = new mongoose.Schema(
     ended_at: { type: Date },
     renewal_count: { type: Number, default: 0 },
 
-    usage: [{ type: mongoose.Schema.Types.ObjectId, ref: "SubUsage" }],
+    usage: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SubUsage' }],
 
     rollover_cap_pct: { type: Number, default: 25 },
     rollover_balance: { type: Number, default: 0 },
@@ -40,11 +48,11 @@ const subscriptionSchema = new mongoose.Schema(
 
     delivery_zone_status: {
       type: String,
-      enum: ["INSIDE", "OUTSIDE"],
-      default: "INSIDE",
-    },
+      enum: ['INSIDE', 'OUTSIDE'],
+      default: 'INSIDE'
+    }
   },
   { timestamps: true }
-);
+)
 
-export default mongoose.model("Subscription", subscriptionSchema);
+export default mongoose.model('Subscription', subscriptionSchema)

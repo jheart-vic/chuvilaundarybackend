@@ -15,7 +15,7 @@ const router = express.Router()
 /**
  * ✅ Verify Paystack webhook signature
  */
-function verifyPaystackSignature(req) {
+function verifyPaystackSignature (req) {
   try {
     const secret = process.env.PAYSTACK_SECRET_KEY
     const signature = req.headers['x-paystack-signature']
@@ -24,15 +24,17 @@ function verifyPaystackSignature(req) {
 
     const computed = crypto
       .createHmac('sha512', secret)
-      .update(req.rawBody)  // ✅ use raw body preserved in entrypoint
+      .update(req.rawBody) // ✅ use raw body preserved in entrypoint
       .digest('hex')
 
-
-console.log('🧪 Signature received:', req.headers['x-paystack-signature'])
-console.log('🧪 Signature computed:', crypto
-  .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-  .update(req.rawBody)
-  .digest('hex'))
+    console.log('🧪 Signature received:', req.headers['x-paystack-signature'])
+    console.log(
+      '🧪 Signature computed:',
+      crypto
+        .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+        .update(req.rawBody)
+        .digest('hex')
+    )
 
     return computed === signature
   } catch (err) {
@@ -40,8 +42,6 @@ console.log('🧪 Signature computed:', crypto
     return false
   }
 }
-
-
 
 /**
  * ✅ Paystack Webhook
@@ -106,7 +106,7 @@ router.post('/webhook/paystack', async (req, res) => {
       })
 
       await order.save()
-     const receiptPath = await generateReceipt(order)
+      const receiptPath = await generateReceipt(order)
 
       const notifyTasks = [
         (async () => {
@@ -180,25 +180,38 @@ router.post('/webhook/paystack', async (req, res) => {
       const now = DateTime.now().setZone('Africa/Lagos')
 
       if (success) {
-        subscription.payment.status = 'PAID';
+        subscription.payment.status = 'PAID'
         subscription.payment.lastTransactionId = reference
         subscription.payment.amountPaid += amount
         subscription.payment.balance = 0
         subscription.payment.failedAttempts = 0
-        subscription.status = 'ACTIVE'
 
-        const newPeriodStart = subscription.period_end
-          ? DateTime.fromJSDate(subscription.period_end)
-          : now
+        const now = DateTime.now().setZone('Africa/Lagos')
 
-        subscription.period_start = newPeriodStart.toJSDate()
-        subscription.period_end = newPeriodStart.plus({ months: 1 }).toJSDate()
-        subscription.renewal_date = newPeriodStart
-          .plus({ months: 1 })
-          .toJSDate()
-        subscription.start_date = subscription.start_date || now.toJSDate()
+        // 🧠 Determine if it's a new subscription or renewal
+        const isNew =
+          subscription.status === 'PENDING' || subscription.renewal_count === 0
+
+        if (isNew) {
+          // ✅ First-time activation — don’t shift the period
+          subscription.status = 'ACTIVE'
+          subscription.period_start = now.toJSDate()
+          subscription.period_end = now.plus({ months: 1 }).toJSDate()
+          subscription.renewal_date = now.plus({ months: 1 }).toJSDate()
+          subscription.start_date = subscription.start_date || now.toJSDate()
+        } else {
+          // 🔁 Renewal — extend period forward
+          const newPeriodStart = DateTime.fromJSDate(subscription.period_end)
+          subscription.period_start = newPeriodStart.toJSDate()
+          subscription.period_end = newPeriodStart
+            .plus({ months: 1 })
+            .toJSDate()
+          subscription.renewal_date = newPeriodStart
+            .plus({ months: 1 })
+            .toJSDate()
+        }
+
         subscription.renewal_count += 1
-
         await subscription.save()
 
         const periodLabel = now.toFormat('yyyy-LL')
@@ -219,18 +232,11 @@ router.post('/webhook/paystack', async (req, res) => {
           { upsert: true, new: true }
         )
 
-        console.log(`✅ Subscription activated or renewed: ${subscription._id}`)
-      } else {
-        subscription.payment.status = 'FAILED';
-        subscription.payment.failedAttempts += 1
-        if (subscription.payment.failedAttempts >= 3) {
-          subscription.status = 'PAUSED'
-          console.warn(
-            `⚠️ Subscription auto-paused after 3 failures: ${subscription._id}`
-          )
-        }
-        await subscription.save()
-        console.log(`❌ Subscription payment failed: ${subscription._id}`)
+        console.log(
+          `✅ Subscription ${isNew ? 'activated' : 'renewed'}: ${
+            subscription._id
+          }`
+        )
       }
 
       return res.status(200).json({ message: 'Subscription webhook processed' })

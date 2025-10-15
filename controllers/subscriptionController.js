@@ -138,9 +138,16 @@ export const subscribe = async (req, res, next) => {
       }
     );
 
+    // 🆕 Generate custom subId here
+    const datePart = now.toFormat("yyyyLLdd"); // e.g. 20251015
+    const randomPart = crypto.randomBytes(3).toString("hex").toUpperCase(); // e.g. 9A4B2F
+    const planPrefix = plan.code.split("_")[0]; // e.g. BASIC
+    const subId = `Chuvi-${planPrefix}-${datePart}-${randomPart}`;
+
     // 🕓 Create new pending subscription
     const now = DateTime.now().setZone("Africa/Lagos");
     const subscription = await Subscription.create({
+      subId,
       customer: userId,
       plan_code: plan.code,
       plan: plan._id,
@@ -161,7 +168,7 @@ export const subscribe = async (req, res, next) => {
         email: user.email,
         name: user.name || "Customer",
         phone: userPhone,
-        orderId: subscription._id.toString()
+        orderId: subId
       });
     } else {
       paymentInitResponse = await initMonnifyPayment({
@@ -169,7 +176,7 @@ export const subscribe = async (req, res, next) => {
         customerName: user.name || "Customer",
         customerEmail: user.email || "noemail@example.com",
         customerPhone: userPhone,
-        orderId: subscription._id.toString(),
+       orderId: subId,
         paymentMethod: "CARD"
       });
     }
@@ -348,9 +355,9 @@ export const getCurrentSubscription = async (req, res, next) => {
 
 export const cancelSubscription = async (req, res) => {
   try {
-     const { subscriptionId } = req.params
+     const { subId } = req.params
  // subscription ID
-    const subscription = await Subscription.findById(subscriptionId);
+    const subscription = await Subscription.findById(subId);
 
     if (!subscription) {
       return res.status(404).json({ message: "Subscription not found" });

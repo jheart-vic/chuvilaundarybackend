@@ -11,19 +11,16 @@ dotenv.config();
 
 const router = express.Router();
 
-/**
- * ✅ Verify Monnify webhook signature using raw body
- */
+/** ✅ Verify Monnify webhook signature */
 function verifySignature(req) {
   try {
     const secret = process.env.MONNIFY_SECRET_KEY;
     const signature = req.headers["monnify-signature"];
-
     if (!signature || !secret) return false;
 
     const computedSignature = crypto
       .createHmac("sha512", secret)
-      .update(req.rawBody) // ✅ Use raw body captured by express.json verify()
+      .update(req.rawBody)
       .digest("hex");
 
     return signature === computedSignature;
@@ -33,12 +30,7 @@ function verifySignature(req) {
   }
 }
 
-/**
- * ✅ Unified webhook handler for:
- * - Order payments
- * - Subscription one-time payments
- * - Subscription recurring payments
- */
+/** ✅ Unified Monnify webhook handler */
 router.post("/webhook/monnify", async (req, res) => {
   try {
     const payload = req.body;
@@ -47,12 +39,10 @@ router.post("/webhook/monnify", async (req, res) => {
       reference: payload?.eventData?.transactionReference,
     });
 
-    // === Validate payload ===
     if (!payload?.eventType || !payload?.eventData) {
       return res.status(400).json({ message: "Invalid webhook payload" });
     }
 
-    // === Verify Monnify signature ===
     if (!verifySignature(req)) {
       console.warn("⚠️ Invalid Monnify signature detected");
       return res.status(401).json({ message: "Invalid signature" });
@@ -67,6 +57,7 @@ router.post("/webhook/monnify", async (req, res) => {
     } = eventData;
 
     const success = ["PAID", "SUCCESS"].includes(paymentStatus);
+    const now = DateTime.now().setZone("Africa/Lagos");
 
     // === 🧠 Idempotency check for Orders ===
     const existingOrder = await Order.findOne({
@@ -97,7 +88,9 @@ router.post("/webhook/monnify", async (req, res) => {
       order.history.push({ status: order.status, note: statusNote });
 
       await order.save();
-      const receiptPath = await generateReceipt(order)
+
+      const receiptPath = await generateReceipt(order);
+
       await notifyOrderEvent({
         user: order.user,
         order,
@@ -108,13 +101,12 @@ router.post("/webhook/monnify", async (req, res) => {
           : undefined,
       });
 
-      // ✅ Notify Admin(s)
-        await notifyOrderEvent({
-          user: process.env.ADMIN_USER_ID,
-          order,
-          attachmentPath: receiptPath,
-          type: success ? "orderBookedForAdmin" : "payment_failed_forAdmin",
-        });
+      await notifyOrderEvent({
+        user: process.env.ADMIN_USER_ID,
+        order,
+        attachmentPath: receiptPath,
+        type: success ? "orderBookedForAdmin" : "payment_failed_forAdmin",
+      });
 
       console.log(
         success
@@ -134,42 +126,47 @@ router.post("/webhook/monnify", async (req, res) => {
       return res.status(200).json({ message: "Subscription already processed" });
     }
 
-    // === 2️⃣ Handle SUBSCRIPTION payments (One-time or recurring) ===
+    // === 2️⃣ Handle SUBSCRIPTION payments ===
     const subscription = await Subscription.findOne({
       $or: [
-        { _id: paymentReference }, // one-time or manual reference
-        { monnifyPaymentReference: paymentReference }, // recurring
+        { "payment.transactionId": transactionReference },
+        { monnifyPaymentReference: paymentReference },
       ],
-    }).populate("plan");
+    }).populate("plan user");
 
     if (subscription) {
       console.log(`💳 Processing Subscription payment: ${subscription._id}`);
 
-      const now = DateTime.now().setZone("Africa/Lagos");
-
       if (success) {
-      subscription.payment.status = 'PAID';
+        subscription.payment.status = "PAID";
         subscription.payment.lastTransactionId = transactionReference;
-        subscription.payment.amountPaid += paidAmount;
+        subscription.payment.transactionId = transactionReference;
+        subscription.payment.amountPaid = paidAmount;
         subscription.payment.balance = 0;
         subscription.payment.failedAttempts = 0;
-
         subscription.status = "ACTIVE";
 
-        // For recurring: just extend the next period
-        const newPeriodStart = subscription.period_end
-          ? DateTime.fromJSDate(subscription.period_end)
-          : now;
+        let newPeriodStart;
+        if (
+          subscription.period_end &&
+          DateTime.fromJSDate(subscription.period_end) > now
+        ) {
+          newPeriodStart = DateTime.fromJSDate(subscription.period_end);
+        } else {
+          newPeriodStart = now;
+        }
 
         subscription.period_start = newPeriodStart.toJSDate();
         subscription.period_end = newPeriodStart.plus({ months: 1 }).toJSDate();
         subscription.renewal_date = newPeriodStart.plus({ months: 1 }).toJSDate();
         subscription.start_date = subscription.start_date || now.toJSDate();
         subscription.renewal_count += 1;
+        subscription.lastRenewalId = `REN-${Date.now().toString(36)}-${Math.floor(
+          Math.random() * 9999
+        )}`;
 
         await subscription.save();
 
-        // Create/update monthly usage record
         const periodLabel = now.toFormat("yyyy-LL");
         await SubUsage.findOneAndUpdate(
           { subscription: subscription._id, period_label: periodLabel },
@@ -188,14 +185,16 @@ router.post("/webhook/monnify", async (req, res) => {
           { upsert: true, new: true }
         );
 
-        console.log(`✅ Subscription active or renewed: ${subscription._id}`);
+        console.log(`✅ Subscription renewed: ${subscription._id}`);
       } else {
-        subscription.payment.status = 'FAILED';
+        subscription.payment.status = "FAILED";
         subscription.payment.failedAttempts += 1;
+
         if (subscription.payment.failedAttempts >= 3) {
           subscription.status = "PAUSED";
           console.warn(`⚠️ Subscription auto-paused after 3 failures: ${subscription._id}`);
         }
+
         await subscription.save();
         console.log(`❌ Subscription payment failed: ${subscription._id}`);
       }
@@ -209,7 +208,6 @@ router.post("/webhook/monnify", async (req, res) => {
       transactionReference,
     });
     return res.status(404).json({ message: "No matching record found" });
-
   } catch (err) {
     console.error("❌ Monnify Webhook Error:", err);
     return res.status(500).json({ message: "Internal Server Error" });
