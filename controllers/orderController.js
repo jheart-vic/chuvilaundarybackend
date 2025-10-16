@@ -628,37 +628,37 @@ export async function getOrderReceipt (req, res) {
 
 export const previewOrder = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate(
-      'currentSubscription'
-    )
+    console.log('req.user:', req.user)
+    const user = await User.findById(req.user._id).populate('currentSubscription')
     if (!user) return res.status(404).json({ message: 'User not found' })
 
     const payload = req.body
-    const subscription = user.currentSubscription
+    console.log('Preview payload:', payload)
 
+    const subscription = user.currentSubscription
     let plan = null
     let usage = null
 
-    // 🧭 1️⃣ Load subscription info if active
     if (subscription?.status === 'ACTIVE') {
       plan = await SubscriptionPlan.findOne({
         code: subscription.plan_code,
         active: true
       })
+      console.log('Plan found:', plan)
 
       if (plan) {
         const periodLabel = new Date().toISOString().slice(0, 7)
+        console.log('Period label:', periodLabel)
         usage = await SubUsage.findOne({
           subscription: subscription._id,
           period_label: periodLabel
         })
+        console.log('Usage found:', usage)
       }
     }
 
-    // 🧮 2️⃣ Determine pricing model
     const pricingModel = plan ? 'SUBSCRIPTION' : 'RETAIL'
 
-    // 🧾 3️⃣ Compute normal totals
     const totals = await computeOrderTotals(
       {
         ...payload,
@@ -668,7 +668,6 @@ export const previewOrder = async (req, res) => {
       { plan, usage }
     )
 
-    // 💰 4️⃣ Check if this is the user's first order
     const previousOrders = await Order.countDocuments({
       user: user._id,
       status: { $ne: 'Cancelled' }
@@ -676,14 +675,12 @@ export const previewOrder = async (req, res) => {
 
     const isFirstOrder = previousOrders === 0 && !user.hasUsedFirstOrderDiscount
 
-    // 🧮 5️⃣ Apply ₦500 flat first-order discount
     if (isFirstOrder && pricingModel === 'RETAIL') {
       const firstOrderDiscount = 500
       totals.firstOrderDiscount = firstOrderDiscount
       totals.grandTotal = Math.max(totals.grandTotal - firstOrderDiscount, 0)
     }
 
-    // ✅ 6️⃣ Respond
     res.json({
       success: true,
       totals,
@@ -693,7 +690,7 @@ export const previewOrder = async (req, res) => {
       }
     })
   } catch (err) {
-    console.error('Preview failed:', err)
-    res.status(500).json({ message: 'Failed to preview order' })
+    console.error('Preview failed:', err.stack || err)
+    res.status(500).json({ message: err.message || 'Failed to preview order' })
   }
 }
