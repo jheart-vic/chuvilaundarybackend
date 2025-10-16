@@ -33,7 +33,7 @@ const subscriptionPlanSchema = new mongoose.Schema(
     discount_pct: { type: Number, default: 0 },
     priority_overhead_per_item_ngn: { type: Number, default: 0 },
 
-    active: { type: Boolean, default: true }
+    active: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

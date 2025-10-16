@@ -164,33 +164,101 @@ export const resumeSubscription = async (req, res, next) => {
 /**
  * Upgrade or downgrade plan
  */
+// export const changePlan = async (req, res, next) => {
+//   try {
+//     const { newPlanCode } = req.body
+//     const userId = req.user._id
+
+//     const subscription = await Subscription.findOne({
+//       customer: userId,
+//       status: 'ACTIVE'
+//     })
+//     if (!subscription)
+//       return res.status(404).json({ message: 'No active subscription' })
+
+//     const newPlan = await SubscriptionPlan.findOne({ code: newPlanCode })
+//     if (!newPlan) return res.status(404).json({ message: 'New plan not found' })
+
+//     subscription.plan_code = newPlan.code
+//     subscription.changed_at = DateTime.now().setZone('Africa/Lagos').toJSDate()
+//     await subscription.save()
+
+//     res.json({
+//       message: `Subscription changed to ${newPlan.name}`,
+//       subscription
+//     })
+//   } catch (err) {
+//     next(err)
+//   }
+// }
+
 export const changePlan = async (req, res, next) => {
   try {
-    const { newPlanCode } = req.body
-    const userId = req.user._id
+    const { newPlanCode, paymentGateway = 'PAYSTACK' } = req.body;
+    const userId = req.user._id;
 
     const subscription = await Subscription.findOne({
       customer: userId,
       status: 'ACTIVE'
-    })
-    if (!subscription)
-      return res.status(404).json({ message: 'No active subscription' })
+    });
+    if (!subscription) return res.status(404).json({ message: 'No active subscription' });
 
-    const newPlan = await SubscriptionPlan.findOne({ code: newPlanCode })
-    if (!newPlan) return res.status(404).json({ message: 'New plan not found' })
+    const newPlan = await SubscriptionPlan.findOne({ code: newPlanCode });
+    if (!newPlan) return res.status(404).json({ message: 'New plan not found' });
 
-    subscription.plan_code = newPlan.code
-    subscription.changed_at = DateTime.now().setZone('Africa/Lagos').toJSDate()
-    await subscription.save()
+    // 1️⃣ Prorate
+    const now = DateTime.now().setZone('Africa/Lagos');
+    const periodStart = DateTime.fromJSDate(subscription.period_start).setZone('Africa/Lagos');
+    const periodEnd = DateTime.fromJSDate(subscription.period_end).setZone('Africa/Lagos');
+    const totalDays = periodEnd.diff(periodStart, 'days').days;
+    const usedDays = now.diff(periodStart, 'days').days;
+    const remainingDays = totalDays - usedDays;
+
+    const oldPlan = await SubscriptionPlan.findOne({ code: subscription.plan_code });
+    const unusedCredit = (oldPlan.price / totalDays) * remainingDays;
+    const newPlanCharge = (newPlan.price / totalDays) * remainingDays;
+    let adjustedAmount = newPlanCharge - unusedCredit;
+
+    subscription.plan_code = newPlan.code;
+    subscription.changed_at = now.toJSDate();
+    subscription.amountDue = adjustedAmount > 0 ? adjustedAmount : 0;
+    subscription.balance = adjustedAmount > 0 ? adjustedAmount : Math.abs(adjustedAmount);
+    await subscription.save();
+
+    // 2️⃣ Fetch user details for payment
+    const user = await User.findById(userId);
+
+    // 3️⃣ Initiate gateway payment if needed
+    let paymentInfo = null;
+    if (adjustedAmount > 0) {
+      if (paymentGateway === 'PAYSTACK') {
+        paymentInfo = await initPaystackPayment({
+          email: user.email,
+          name: user.fullName,
+          phone: user.phone,
+          amount: adjustedAmount,
+          orderId: subscription.subId
+        });
+      } else if (paymentGateway === 'MONNIFY') {
+        paymentInfo = await initMonnifyPayment({
+          customerName: user.fullName,
+          customerEmail: user.email,
+          customerPhone: user.phone,
+          amount: adjustedAmount,
+          orderId: subscription.subId,
+        });
+      }
+    }
 
     res.json({
-      message: `Subscription changed to ${newPlan.name}`,
-      subscription
-    })
+      message: `Subscription changed to ${newPlan.name}. Adjusted amount due: ₦${adjustedAmount.toFixed(2)}`,
+      subscription,
+      payment: paymentInfo
+    });
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
 
 /**
  * Rollover unused items/trips into new usage period
@@ -246,64 +314,137 @@ export const rolloverUsage = async (req, res, next) => {
   }
 }
 
+
+
 export const getCurrentSubscription = async (req, res, next) => {
   try {
     const subscription = await Subscription.findOne({
       customer: req.user._id,
-      status: 'ACTIVE'
-    })
+      status: { $in: ["ACTIVE", "PAUSED"] }
+    }).populate(
+      "plan",
+      "name code family tier price_ngn monthly_items included_trips overageFee sla_hours express_multiplier sameDay_multiplier rollover_limit_items"
+    );
 
     if (!subscription) {
-      return res.status(404).json({ message: 'No active subscription' })
+      return res
+        .status(404)
+        .json({ message: "You don't have any subscription yet" });
     }
 
-    res.json({ subscription })
+    // 🕒 Calculate days left
+    const now = DateTime.now().setZone("Africa/Lagos");
+    const renewalDate = DateTime.fromJSDate(subscription.renewal_date);
+    const daysLeft = Math.max(0, Math.ceil(renewalDate.diff(now, "days").days));
+
+    // 🔁 Determine auto-renew status
+    const autoRenew =
+      subscription.status === "ACTIVE" &&
+      !["CANCELLED", "CANCEL_AT_PERIOD_END"].includes(subscription.status);
+
+    const formatted = {
+      id: subscription._id,
+      subId: subscription.subId,
+      status: subscription.status,
+      startedAt: subscription.start_date,
+      periodStart: subscription.period_start,
+      periodEnd: subscription.period_end,
+      renewalDate: subscription.renewal_date,
+      renewalCount: subscription.renewal_count,
+      rolloverBalance: subscription.rollover_balance || 0,
+      pauseCountQuarter: subscription.pause_count_qtr || 0,
+      daysLeft,
+      autoRenew,
+
+      plan: {
+        name: subscription.plan?.name,
+        code: subscription.plan?.code,
+        tier: subscription.plan?.tier,
+        family: subscription.plan?.family,
+        price: subscription.plan?.price_ngn,
+        monthlyItems: subscription.plan?.monthly_items,
+        includedTrips: subscription.plan?.included_trips,
+        overageFee: subscription.plan?.overageFee,
+        slaHours: subscription.plan?.sla_hours,
+        expressMultiplier: subscription.plan?.express_multiplier,
+        sameDayMultiplier: subscription.plan?.sameDay_multiplier,
+        rolloverLimitItems: subscription.plan?.rollover_limit_items
+      },
+
+      payment: {
+        method: subscription.payment?.method,
+        gateway: subscription.payment?.gateway,
+        status: subscription.payment?.status,
+        amountPaid: subscription.payment?.amountPaid,
+        balance: subscription.payment?.balance,
+      }
+    };
+
+    res.json({ subscription: formatted });
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
+
+
 
 export const cancelSubscription = async (req, res) => {
   try {
-     const { subId } = req.params
- // subscription ID
-    const subscription = await Subscription.findById(subId);
+    const { subId } = req.params;
+
+    // ✅ Find by custom subscription ID
+    const subscription = await Subscription.findOne({ subId }).populate('customer');
 
     if (!subscription) {
       return res.status(404).json({ message: "Subscription not found" });
     }
 
-    // Prevent double cancellation
+    // ❌ Prevent double cancellation
     if (subscription.status === "CANCELLED") {
       return res.status(400).json({ message: "Subscription already cancelled" });
     }
 
-    // 🔁 Identify gateway
+    // 🔁 Identify payment gateway
     const gateway = subscription.payment?.gateway;
 
-    // 🚫 Cancel auto-payment if applicable
+    // 🚫 Cancel auto-payment remotely if applicable
     if (gateway === "MONNIFY") {
       const mandateRef = subscription.payment?.monnify?.authorizationRef;
       if (mandateRef) {
-        await cancelMonnifyMandate(mandateRef);
+        try {
+          await cancelMonnifyMandate(mandateRef);
+        } catch (err) {
+          console.error("Monnify mandate cancellation failed:", err);
+          return res.status(500).json({
+            message: "Failed to cancel Monnify mandate",
+            error: err.message
+          });
+        }
       }
     } else if (gateway === "PAYSTACK") {
-      const subscriptionCode = subscription.payment?.paystack?.subscriptionCode; // optional
+      const subscriptionCode = subscription.payment?.paystack?.subscriptionCode;
       const authorizationCode = subscription.payment?.paystack?.authorizationCode;
 
       if (subscriptionCode) {
-        // Case 1: Using Paystack Subscription API
-        await cancelPaystackSubscription(subscriptionCode);
+        try {
+          await cancelPaystackSubscription(subscriptionCode);
+        } catch (err) {
+          console.error("Paystack subscription cancellation failed:", err);
+          return res.status(500).json({
+            message: "Failed to cancel Paystack subscription",
+            error: err.message
+          });
+        }
       } else if (authorizationCode) {
-        // Case 2: Manual recurring via stored authorization
+        // Manual recurring via stored authorization
         subscription.payment.paystack.authorizationCode = null;
         subscription.auto_payment_cancelled = true;
       }
     }
 
-    // 🧾 Update subscription status
+    // 🧾 Update subscription status locally
     subscription.status = "CANCELLED";
-    subscription.auto_payment_cancelled = true;
+    subscription.auto_payment_cancelled = subscription.auto_payment_cancelled || true;
     subscription.canceled_reason = req.body.reason || "User cancelled manually";
     subscription.ended_at = new Date();
 
@@ -312,13 +453,14 @@ export const cancelSubscription = async (req, res) => {
     return res.json({
       success: true,
       message: "Subscription cancelled successfully",
-      subscription,
+      subscription
     });
   } catch (err) {
     console.error("Cancel subscription error:", err);
     res.status(500).json({
       message: "Failed to cancel subscription",
-      error: err.message,
+      error: err.message
     });
   }
 };
+

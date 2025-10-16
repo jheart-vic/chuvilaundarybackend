@@ -8,7 +8,7 @@ import { listServices, createService, updateService, deleteService } from "../co
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
 import { deletePricing, listPricings, upsertPricing } from "../controllers/servicePricingController.js";
 import { updateOrderStatus } from "../controllers/orderController.js";
-import { createPlan, deactivatePlan, updatePlan } from "../controllers/subscriptionPlanController.js";
+import { activatePlan, createPlan, deactivatePlan, updatePlan } from "../controllers/subscriptionPlanController.js";
 import { getTotalIssues, listIssues, updateIssue } from "../controllers/issuesController.js";
 import { listReviews, reviewSummary } from "../controllers/reviewsController.js";
 
@@ -57,6 +57,7 @@ router.patch("/orders/:orderId/cancel", requireAuth, requireEmployeeOrAdmin, can
 router.post("/plans", requireAuth, requireAdmin, createPlan);
 router.put("/plans/:code", requireAuth, requireAdmin, updatePlan);
 router.delete("/plans/:code", requireAuth, requireAdmin, deactivatePlan);
+router.patch('/plans/:code/activate',requireAuth, requireAdmin, activatePlan);
 
 //issues routes
 router.get("/issues",  requireAuth, requireEmployeeOrAdmin, listIssues);

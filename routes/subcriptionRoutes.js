@@ -20,6 +20,6 @@ router.post("/resume", requireAuth, resumeSubscription);
 router.post("/change-plan", requireAuth, changePlan);
 router.post("/rollover", requireAuth, rolloverUsage);
 router.get("/current", requireAuth, getCurrentSubscription);
-router.patch("/:subscriptionId/cancel-auto-payment", cancelSubscription);
+router.patch("/:subId/cancel-auto-payment", cancelSubscription);
 
 export default router;

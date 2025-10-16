@@ -5,17 +5,21 @@ import SubscriptionPlan from "../models/SubscriptionPlan.js";
  */
 export const createPlan = async (req, res, next) => {
   try {
-    const { code } = req.body;
+    let { code } = req.body;
 
-    // Ensure unique code
-    const exists = await SubscriptionPlan.findOne({ code });
+    // ✨ Auto-format the code
+    const formattedCode = code.trim().toUpperCase().replace(/\s+/g, "_");
+    req.body.code = formattedCode;
+
+    // ✅ Ensure unique code using the formatted version
+    const exists = await SubscriptionPlan.findOne({ code: formattedCode });
     if (exists) {
       return res.status(400).json({ message: "Plan code already exists" });
     }
 
+    // ✅ Save the formatted code
     const plan = await SubscriptionPlan.create(req.body);
 
-    // 🔔 Optional: Broadcast via WebSocket for live admin dashboard updates
     if (req.io) req.io.emit("plan:created", plan);
 
     res.status(201).json({
@@ -57,9 +61,7 @@ export const updatePlan = async (req, res, next) => {
  */
 export const listPlans = async (req, res, next) => {
   try {
-    const plans = await SubscriptionPlan.find({ active: true }).sort({
-      price_ngn: 1,
-    });
+    const plans = await SubscriptionPlan.find({ active: true }).sort({ family: 1, tier: 1, price_ngn: 1 });
     res.json(plans);
   } catch (err) {
     next(err);
@@ -96,6 +98,27 @@ export const deactivatePlan = async (req, res, next) => {
 
     res.json({
       message: "Plan deactivated successfully",
+      plan,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const activatePlan = async (req, res, next) => {
+  try {
+    const plan = await SubscriptionPlan.findOneAndUpdate(
+      { code: req.params.code },
+      { active: true },
+      { new: true }
+    );
+
+    if (!plan) return res.status(404).json({ message: "Plan not found" });
+
+    if (req.io) req.io.emit("plan:activated", plan);
+
+    res.json({
+      message: "Plan activated successfully",
       plan,
     });
   } catch (err) {

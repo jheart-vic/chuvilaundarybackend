@@ -40,6 +40,7 @@ const subscriptionSchema = new mongoose.Schema(
     renewal_count: { type: Number, default: 0 },
 
     usage: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SubUsage' }],
+     auto_payment_cancelled: { type: Boolean, default: false },
 
     rollover_cap_pct: { type: Number, default: 25 },
     rollover_balance: { type: Number, default: 0 },
