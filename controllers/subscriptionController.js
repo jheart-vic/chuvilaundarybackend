@@ -314,8 +314,6 @@ export const rolloverUsage = async (req, res, next) => {
   }
 }
 
-
-
 export const getCurrentSubscription = async (req, res, next) => {
   try {
     const subscription = await Subscription.findOne({
@@ -324,7 +322,7 @@ export const getCurrentSubscription = async (req, res, next) => {
     }).populate(
       "plan",
       "name code family tier price_ngn monthly_items included_trips overageFee sla_hours express_multiplier sameDay_multiplier rollover_limit_items"
-    );
+    ).populate('usage');
 
     if (!subscription) {
       return res
@@ -342,6 +340,13 @@ export const getCurrentSubscription = async (req, res, next) => {
       subscription.status === "ACTIVE" &&
       !["CANCELLED", "CANCEL_AT_PERIOD_END"].includes(subscription.status);
 
+    // 🔢 Calculate items remaining
+    const currentUsage = subscription.usage[subscription.usage.length - 1]; // latest period
+    const itemsRemaining = subscription.plan.monthly_items +
+                           (currentUsage?.rollover_items || subscription.rollover_balance || 0) -
+                           (currentUsage?.items_used || 0) -
+                           (currentUsage?.overage_items || 0);
+
     const formatted = {
       id: subscription._id,
       subId: subscription.subId,
@@ -355,6 +360,7 @@ export const getCurrentSubscription = async (req, res, next) => {
       pauseCountQuarter: subscription.pause_count_qtr || 0,
       daysLeft,
       autoRenew,
+      itemsRemaining: itemsRemaining > 0 ? itemsRemaining : 0, // never negative
 
       plan: {
         name: subscription.plan?.name,
