@@ -386,7 +386,7 @@ export const getCurrentSubscription = async (req, res, next) => {
   }
 };
 
-export const cancelAutoPayment = async (req, res) => {
+export const cancelSubscription = async (req, res) => {
   try {
     const { subId } = req.params;
     const subscription = await Subscription.findOne({ subId }).populate('customer');
