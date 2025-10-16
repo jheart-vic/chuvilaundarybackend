@@ -628,57 +628,53 @@ export async function getOrderReceipt (req, res) {
 
 export const previewOrder = async (req, res) => {
   try {
-    console.log('req.user:', req.user)
-    const user = await User.findById(req.user._id).populate('currentSubscription')
-    if (!user) return res.status(404).json({ message: 'User not found' })
+    const user = await User.findById(req.user._id).populate("currentSubscription");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    const payload = req.body
-    console.log('Preview payload:', payload)
+    const payload = req.body;
+    console.log("🧾 Preview payload:", payload);
 
-    const subscription = user.currentSubscription
-    let plan = null
-    let usage = null
+    let plan = null;
+    let usage = null;
 
-    if (subscription?.status === 'ACTIVE') {
+    const subscription = user.currentSubscription;
+    if (subscription?.status === "ACTIVE") {
       plan = await SubscriptionPlan.findOne({
         code: subscription.plan_code,
-        active: true
-      })
-      console.log('Plan found:', plan)
+        active: true,
+      });
 
       if (plan) {
-        const periodLabel = new Date().toISOString().slice(0, 7)
-        console.log('Period label:', periodLabel)
+        const periodLabel = new Date().toISOString().slice(0, 7);
         usage = await SubUsage.findOne({
           subscription: subscription._id,
-          period_label: periodLabel
-        })
-        console.log('Usage found:', usage)
+          period_label: periodLabel,
+        });
       }
     }
 
-    const pricingModel = plan ? 'SUBSCRIPTION' : 'RETAIL'
+    const pricingModel = plan ? "SUBSCRIPTION" : "RETAIL";
 
     const totals = await computeOrderTotals(
       {
         ...payload,
         pricingModel,
-        userPhone: user.phone
+        userPhone: user.phone,
       },
       { plan, usage }
-    )
+    );
 
     const previousOrders = await Order.countDocuments({
       user: user._id,
-      status: { $ne: 'Cancelled' }
-    })
+      status: { $ne: "Cancelled" },
+    });
 
-    const isFirstOrder = previousOrders === 0 && !user.hasUsedFirstOrderDiscount
+    const isFirstOrder = previousOrders === 0 && !user.hasUsedFirstOrderDiscount;
 
-    if (isFirstOrder && pricingModel === 'RETAIL') {
-      const firstOrderDiscount = 500
-      totals.firstOrderDiscount = firstOrderDiscount
-      totals.grandTotal = Math.max(totals.grandTotal - firstOrderDiscount, 0)
+    if (isFirstOrder && pricingModel === "RETAIL") {
+      const firstOrderDiscount = 500;
+      totals.firstOrderDiscount = firstOrderDiscount;
+      totals.grandTotal = Math.max(totals.grandTotal - firstOrderDiscount, 0);
     }
 
     res.json({
@@ -686,11 +682,11 @@ export const previewOrder = async (req, res) => {
       totals,
       meta: {
         pricingModel,
-        isFirstOrder
-      }
-    })
+        isFirstOrder,
+      },
+    });
   } catch (err) {
-    console.error('Preview failed:', err.stack || err)
-    res.status(500).json({ message: err.message || 'Failed to preview order' })
+    console.error("❌ Preview failed:", err.stack || err);
+    res.status(500).json({ message: err.message || "Failed to preview order" });
   }
-}
+};
