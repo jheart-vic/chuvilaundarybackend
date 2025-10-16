@@ -398,125 +398,125 @@
 // }
 
 
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-dotenv.config();
+// import mongoose from "mongoose";
+// import dotenv from "dotenv";
+// dotenv.config();
 
 
 
-import { getRetailItemPrice, computeRetailDeliveryFee } from "./utils/retailPricing.js";
-import { computeSubscriptionItemPrice, computeSubscriptionDeliveryFee } from "./utils/subscriptionPricing.js";
-import { computeOrderTotals } from "./utils/orderTotals.js";
-import ServicePricing from "./models/ServicePricing.js";
-import SubscriptionPlan from "./models/SubscriptionPlan.js";
-import SubUsage from "./models/SubUsage.js";
+// import { getRetailItemPrice, computeRetailDeliveryFee } from "./utils/retailPricing.js";
+// import { computeSubscriptionItemPrice, computeSubscriptionDeliveryFee } from "./utils/subscriptionPricing.js";
+// import { computeOrderTotals } from "./utils/orderTotals.js";
+// import ServicePricing from "./models/ServicePricing.js";
+// import SubscriptionPlan from "./models/SubscriptionPlan.js";
+// import SubUsage from "./models/SubUsage.js";
 
-// ------------------------
-// MongoDB Connect
-// ------------------------
-await mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/chuvi_test");
-console.log("✅ Connected to MongoDB");
+// // ------------------------
+// // MongoDB Connect
+// // ------------------------
+// await mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/chuvi_test");
+// console.log("✅ Connected to MongoDB");
 
-// ------------------------
-// 1️⃣ Seed sample pricing + plan
-// ------------------------
-await ServicePricing.deleteMany({});
-await SubscriptionPlan.deleteMany({});
-await SubUsage.deleteMany({});
+// // ------------------------
+// // 1️⃣ Seed sample pricing + plan
+// // ------------------------
+// await ServicePricing.deleteMany({});
+// await SubscriptionPlan.deleteMany({});
+// await SubUsage.deleteMany({});
 
-const retailPricing = await ServicePricing.create({
-  serviceCode: "LAUNDRY",
-  serviceTier: "STANDARD",
-  pricingModel: "RETAIL",
-  pricePerItem: 1000,
-  sameDayMultiplier: 1.8,
-  expressMultiplier: 1.4,
-  delivery_fee_per_km: 500
-});
+// const retailPricing = await ServicePricing.create({
+//   serviceCode: "LAUNDRY",
+//   serviceTier: "STANDARD",
+//   pricingModel: "RETAIL",
+//   pricePerItem: 1000,
+//   sameDayMultiplier: 1.8,
+//   expressMultiplier: 1.4,
+//   delivery_fee_per_km: 500
+// });
 
-const plan = await SubscriptionPlan.create({
-  code: "BASIC_SAVER_12",
-  name: "Basic Saver 12",
-  family: "BASIC_SAVER",
-  tier: "STANDARD",
-  monthly_items: 20,
-  overageFee: 500,
-  included_trips: 2,
-  price_ngn: 10000,
-  express_multiplier: 1.2,
-  sameDay_multiplier: 1.8,
-  rollover_limit_items: 5
-});
+// const plan = await SubscriptionPlan.create({
+//   code: "BASIC_SAVER_12",
+//   name: "Basic Saver 12",
+//   family: "BASIC_SAVER",
+//   tier: "STANDARD",
+//   monthly_items: 20,
+//   overageFee: 500,
+//   included_trips: 2,
+//   price_ngn: 10000,
+//   express_multiplier: 1.2,
+//   sameDay_multiplier: 1.8,
+//   rollover_limit_items: 5
+// });
 
-const usage = await SubUsage.create({
-  subscription: new mongoose.Types.ObjectId(),  // just a dummy for test
-  period_label: "2025-10",
-  items_used: 15,
-  trips_used: 1,
-  overage_items: 0,
-  computed_overage_fee_ngn: 0
-});
+// const usage = await SubUsage.create({
+//   subscription: new mongoose.Types.ObjectId(),  // just a dummy for test
+//   period_label: "2025-10",
+//   items_used: 15,
+//   trips_used: 1,
+//   overage_items: 0,
+//   computed_overage_fee_ngn: 0
+// });
 
-console.log("✅ Seeded pricing + plan");
+// console.log("✅ Seeded pricing + plan");
 
-// ------------------------
-// 2️⃣ Test Retail Pricing
-// ------------------------
-console.log("\n🧮 RETAIL PRICING TESTS ------------------");
+// // ------------------------
+// // 2️⃣ Test Retail Pricing
+// // ------------------------
+// console.log("\n🧮 RETAIL PRICING TESTS ------------------");
 
-const retailNormal = await getRetailItemPrice("LAUNDRY", "STANDARD");
-const retailExpress = await getRetailItemPrice("LAUNDRY", "STANDARD", { express: true });
-const retailSameDay = await getRetailItemPrice("LAUNDRY", "STANDARD", { sameDay: true });
+// const retailNormal = await getRetailItemPrice("LAUNDRY", "STANDARD");
+// const retailExpress = await getRetailItemPrice("LAUNDRY", "STANDARD", { express: true });
+// const retailSameDay = await getRetailItemPrice("LAUNDRY", "STANDARD", { sameDay: true });
 
-console.log({ retailNormal, retailExpress, retailSameDay });
+// console.log({ retailNormal, retailExpress, retailSameDay });
 
-const retailDelivery = await computeRetailDeliveryFee({ city: "Awka" }, 12000);
-console.log("Retail Delivery Fee (subtotal ₦12k):", retailDelivery);
+// const retailDelivery = await computeRetailDeliveryFee({ city: "Awka" }, 12000);
+// console.log("Retail Delivery Fee (subtotal ₦12k):", retailDelivery);
 
-const retailFreeDelivery = await computeRetailDeliveryFee({ city: "Awka" }, 20000);
-console.log("Retail Delivery Fee (subtotal ₦20k):", retailFreeDelivery);
+// const retailFreeDelivery = await computeRetailDeliveryFee({ city: "Awka" }, 20000);
+// console.log("Retail Delivery Fee (subtotal ₦20k):", retailFreeDelivery);
 
-// ------------------------
-// 3️⃣ Test Subscription Pricing
-// ------------------------
-console.log("\n💳 SUBSCRIPTION PRICING TESTS ------------------");
+// // ------------------------
+// // 3️⃣ Test Subscription Pricing
+// // ------------------------
+// console.log("\n💳 SUBSCRIPTION PRICING TESTS ------------------");
 
-const subNormal = await computeSubscriptionItemPrice(plan, 5, {}, usage);
-const subExpress = await computeSubscriptionItemPrice(plan, 5, { express: true }, usage);
-const subSameDay = await computeSubscriptionItemPrice(plan, 5, { sameDay: true }, usage);
+// const subNormal = await computeSubscriptionItemPrice(plan, 5, {}, usage);
+// const subExpress = await computeSubscriptionItemPrice(plan, 5, { express: true }, usage);
+// const subSameDay = await computeSubscriptionItemPrice(plan, 5, { sameDay: true }, usage);
 
-console.log({ subNormal, subExpress, subSameDay });
+// console.log({ subNormal, subExpress, subSameDay });
 
-const subDelivery = await computeSubscriptionDeliveryFee(plan, { city: "Awka" }, 8000, usage);
-console.log("Subscription Delivery Fee:", subDelivery);
+// const subDelivery = await computeSubscriptionDeliveryFee(plan, { city: "Awka" }, 8000, usage);
+// console.log("Subscription Delivery Fee:", subDelivery);
 
-// ------------------------
-// 4️⃣ Test Full Order Totals
-// ------------------------
-console.log("\n📦 ORDER TOTAL TESTS ------------------");
+// // ------------------------
+// // 4️⃣ Test Full Order Totals
+// // ------------------------
+// console.log("\n📦 ORDER TOTAL TESTS ------------------");
 
-const order = {
-  pricingModel: "RETAIL",
-  serviceTier: "STANDARD",
-  items: [
-    { serviceCode: "LAUNDRY", quantity: 3, express: true },
-    { serviceCode: "LAUNDRY", quantity: 2, sameDay: true }
-  ],
-  delivery: { address: { city: "Awka" } }
-};
+// const order = {
+//   pricingModel: "RETAIL",
+//   serviceTier: "STANDARD",
+//   items: [
+//     { serviceCode: "LAUNDRY", quantity: 3, express: true },
+//     { serviceCode: "LAUNDRY", quantity: 2, sameDay: true }
+//   ],
+//   delivery: { address: { city: "Awka" } }
+// };
 
-const retailTotals = await computeOrderTotals(order);
-console.log("Retail Order Totals:", retailTotals);
+// const retailTotals = await computeOrderTotals(order);
+// console.log("Retail Order Totals:", retailTotals);
 
-const subOrder = {
-  items: [{ serviceCode: "LAUNDRY", quantity: 10, express: true }],
-  delivery: { address: { city: "Awka" } }
-};
-const subTotals = await computeOrderTotals(subOrder, { plan, usage });
-console.log("Subscription Order Totals:", subTotals);
+// const subOrder = {
+//   items: [{ serviceCode: "LAUNDRY", quantity: 10, express: true }],
+//   delivery: { address: { city: "Awka" } }
+// };
+// const subTotals = await computeOrderTotals(subOrder, { plan, usage });
+// console.log("Subscription Order Totals:", subTotals);
 
-// ------------------------
-// Cleanup
-// ------------------------
-await mongoose.disconnect();
-console.log("\n✅ Done — test complete!");
+// // ------------------------
+// // Cleanup
+// // ------------------------
+// await mongoose.disconnect();
+// console.log("\n✅ Done — test complete!");

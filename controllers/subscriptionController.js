@@ -386,81 +386,121 @@ export const getCurrentSubscription = async (req, res, next) => {
   }
 };
 
-
-
-export const cancelSubscription = async (req, res) => {
+export const cancelAutoPayment = async (req, res) => {
   try {
     const { subId } = req.params;
-
-    // ✅ Find by custom subscription ID
     const subscription = await Subscription.findOne({ subId }).populate('customer');
 
-    if (!subscription) {
-      return res.status(404).json({ message: "Subscription not found" });
+    if (!subscription) return res.status(404).json({ message: "Subscription not found" });
+
+    if (subscription.auto_payment_cancelled) {
+      return res.status(400).json({ message: "Auto payment already cancelled" });
     }
 
-    // ❌ Prevent double cancellation
-    if (subscription.status === "CANCELLED") {
-      return res.status(400).json({ message: "Subscription already cancelled" });
-    }
-
-    // 🔁 Identify payment gateway
     const gateway = subscription.payment?.gateway;
 
-    // 🚫 Cancel auto-payment remotely if applicable
+    // Cancel the auto-payment remotely
     if (gateway === "MONNIFY") {
       const mandateRef = subscription.payment?.monnify?.authorizationRef;
-      if (mandateRef) {
-        try {
-          await cancelMonnifyMandate(mandateRef);
-        } catch (err) {
-          console.error("Monnify mandate cancellation failed:", err);
-          return res.status(500).json({
-            message: "Failed to cancel Monnify mandate",
-            error: err.message
-          });
-        }
-      }
+      if (mandateRef) await cancelMonnifyMandate(mandateRef);
     } else if (gateway === "PAYSTACK") {
       const subscriptionCode = subscription.payment?.paystack?.subscriptionCode;
       const authorizationCode = subscription.payment?.paystack?.authorizationCode;
-
-      if (subscriptionCode) {
-        try {
-          await cancelPaystackSubscription(subscriptionCode);
-        } catch (err) {
-          console.error("Paystack subscription cancellation failed:", err);
-          return res.status(500).json({
-            message: "Failed to cancel Paystack subscription",
-            error: err.message
-          });
-        }
-      } else if (authorizationCode) {
-        // Manual recurring via stored authorization
-        subscription.payment.paystack.authorizationCode = null;
-        subscription.auto_payment_cancelled = true;
-      }
+      if (subscriptionCode) await cancelPaystackSubscription(subscriptionCode);
+      if (authorizationCode) subscription.payment.paystack.authorizationCode = null;
     }
 
-    // 🧾 Update subscription status locally
-    subscription.status = "CANCELLED";
-    subscription.auto_payment_cancelled = subscription.auto_payment_cancelled || true;
-    subscription.canceled_reason = req.body.reason || "User cancelled manually";
-    subscription.ended_at = new Date();
-
+    // ✅ Mark auto-payment as cancelled locally
+    subscription.auto_payment_cancelled = true;
+    subscription.canceled_reason = req.body.reason || "Auto-payment cancelled";
     await subscription.save();
 
     return res.json({
       success: true,
-      message: "Subscription cancelled successfully",
+      message: "Auto-payment cancelled successfully. Current plan remains active.",
       subscription
     });
   } catch (err) {
-    console.error("Cancel subscription error:", err);
-    res.status(500).json({
-      message: "Failed to cancel subscription",
-      error: err.message
-    });
+    console.error("Cancel auto-payment error:", err);
+    res.status(500).json({ message: "Failed to cancel auto-payment", error: err.message });
   }
 };
+
+
+
+// export const cancelSubscription = async (req, res) => {
+//   try {
+//     const { subId } = req.params;
+
+//     // ✅ Find by custom subscription ID
+//     const subscription = await Subscription.findOne({ subId }).populate('customer');
+
+//     if (!subscription) {
+//       return res.status(404).json({ message: "Subscription not found" });
+//     }
+
+//     // ❌ Prevent double cancellation
+//     if (subscription.status === "CANCELLED") {
+//       return res.status(400).json({ message: "Subscription already cancelled" });
+//     }
+
+//     // 🔁 Identify payment gateway
+//     const gateway = subscription.payment?.gateway;
+
+//     // 🚫 Cancel auto-payment remotely if applicable
+//     if (gateway === "MONNIFY") {
+//       const mandateRef = subscription.payment?.monnify?.authorizationRef;
+//       if (mandateRef) {
+//         try {
+//           await cancelMonnifyMandate(mandateRef);
+//         } catch (err) {
+//           console.error("Monnify mandate cancellation failed:", err);
+//           return res.status(500).json({
+//             message: "Failed to cancel Monnify mandate",
+//             error: err.message
+//           });
+//         }
+//       }
+//     } else if (gateway === "PAYSTACK") {
+//       const subscriptionCode = subscription.payment?.paystack?.subscriptionCode;
+//       const authorizationCode = subscription.payment?.paystack?.authorizationCode;
+
+//       if (subscriptionCode) {
+//         try {
+//           await cancelPaystackSubscription(subscriptionCode);
+//         } catch (err) {
+//           console.error("Paystack subscription cancellation failed:", err);
+//           return res.status(500).json({
+//             message: "Failed to cancel Paystack subscription",
+//             error: err.message
+//           });
+//         }
+//       } else if (authorizationCode) {
+//         // Manual recurring via stored authorization
+//         subscription.payment.paystack.authorizationCode = null;
+//         subscription.auto_payment_cancelled = true;
+//       }
+//     }
+
+//     // 🧾 Update subscription status locally
+//     subscription.status = "CANCELLED";
+//     subscription.auto_payment_cancelled = subscription.auto_payment_cancelled || true;
+//     subscription.canceled_reason = req.body.reason || "User cancelled manually";
+//     subscription.ended_at = new Date();
+
+//     await subscription.save();
+
+//     return res.json({
+//       success: true,
+//       message: "Subscription cancelled successfully",
+//       subscription
+//     });
+//   } catch (err) {
+//     console.error("Cancel subscription error:", err);
+//     res.status(500).json({
+//       message: "Failed to cancel subscription",
+//       error: err.message
+//     });
+//   }
+// };
 
