@@ -1,8 +1,5 @@
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
 
-/**
- * ✅ Admin: Create a new subscription plan
- */
 export const createPlan = async (req, res, next) => {
   try {
     let { code } = req.body;
@@ -31,9 +28,6 @@ export const createPlan = async (req, res, next) => {
   }
 };
 
-/**
- * ✅ Admin: Update an existing plan
- */
 export const updatePlan = async (req, res, next) => {
   try {
     const plan = await SubscriptionPlan.findOneAndUpdate(
@@ -56,9 +50,6 @@ export const updatePlan = async (req, res, next) => {
   }
 };
 
-/**
- * ✅ Public: List all active plans (for users)
- */
 export const listPlans = async (req, res, next) => {
   try {
     const plans = await SubscriptionPlan.find({ active: true }).sort({ family: 1, tier: 1, price_ngn: 1 });
@@ -68,9 +59,6 @@ export const listPlans = async (req, res, next) => {
   }
 };
 
-/**
- * ✅ Public: Get single plan details
- */
 export const getPlan = async (req, res, next) => {
   try {
     const plan = await SubscriptionPlan.findOne({ code: req.params.code });
@@ -81,9 +69,16 @@ export const getPlan = async (req, res, next) => {
   }
 };
 
-/**
- * ✅ Admin: Deactivate a plan
- */
+export const getSinglePlan = async (req, res, next) => {
+  try {
+    const plan = await SubscriptionPlan.findById(req.params.id);
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+    res.json({ success: true, plan });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const deactivatePlan = async (req, res, next) => {
   try {
     const plan = await SubscriptionPlan.findOneAndUpdate(
@@ -121,6 +116,15 @@ export const activatePlan = async (req, res, next) => {
       message: "Plan activated successfully",
       plan,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listActivePlans = async (req, res, next) => {
+  try {
+    const plans = await SubscriptionPlan.find({ active: true }).sort({ price_ngn: 1 });
+    res.json({ success: true, count: plans.length, plans });
   } catch (err) {
     next(err);
   }
