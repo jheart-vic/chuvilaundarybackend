@@ -106,6 +106,9 @@ export const subscribe = async (req, res, next) => {
     };
 
     await subscription.save();
+    await User.findByIdAndUpdate(userId, {
+      $set: { currentSubscription: subscription._id }
+    });
 
     res.status(201).json({
       message: "Subscription created. Proceed to payment.",

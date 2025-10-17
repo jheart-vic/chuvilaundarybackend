@@ -1,5 +1,6 @@
 import Issue from '../models/Issue.js'
 import Notification from '../models/Notification.js'
+import Order from '../models/Order.js'
 import { notifyIssueEvent, sendEmail } from '../services/notificationService.js'
 import dotenv from 'dotenv'
 
@@ -47,7 +48,7 @@ export async function createIssue(req, res, next) {
 
 export async function updateIssue(req, res, next) {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // e.g. CHUVI-ORD-34F8D3
     const { status, adminMessage } = req.body;
 
     const allowedStatuses = ['open', 'in_progress', 'resolved', 'closed'];
@@ -61,18 +62,31 @@ export async function updateIssue(req, res, next) {
       updateFields.$push = { messages: { sender: 'admin', content: adminMessage } };
     }
 
-    const issue = await Issue.findByIdAndUpdate(id, updateFields, { new: true });
-    if (!issue) return res.status(404).json({ success: false, error: 'Issue not found' });
+    // 1️⃣ Find the order by its custom string ID
+    const order = await Order.findOne({ orderId: id });
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
 
-    // Notify admin / system
+    // 2️⃣ Use the order._id to find the linked issue
+    const issue = await Issue.findOneAndUpdate(
+      { order: order._id },
+      updateFields,
+      { new: true }
+    ).populate('order', 'orderId');
+
+    if (!issue) {
+      return res.status(404).json({ success: false, error: 'Issue not found for this order' });
+    }
+
+    // 3️⃣ Notify and return
     await Notification.create({
       user: req.user?._id,
       title: 'Issue Updated',
-      message: `Issue #${issue._id} updated. Status: ${issue.status}`,
+      message: `Issue for order ${order.orderId} updated. Status: ${issue.status}`,
       type: 'system'
     });
 
-    // Notify user using templates with latest message
     await notifyIssueEvent({ user: req.user, issue, type: "issue_updated" });
 
     return res.json({ success: true, issue });

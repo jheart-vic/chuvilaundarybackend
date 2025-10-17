@@ -76,16 +76,48 @@ export async function createReview(req, res, next) {
   }
 }
 
-
 //Admin or user can list reviews for an order
 export async function listReviews(req, res, next) {
   try {
-    const reviews = await Review.find({ order: req.query.orderId })
+    const reviews = await Review.find({ order: req.param.orderId })
       .populate('user', 'fullName')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, reviews });
   } catch (err) {
+    next(err);
+  }
+}
+
+export async function listUserReviews(req, res, next) {
+  try {
+    const { orderId } = req.params;
+    const match = { user: req.user._id };
+
+    if (orderId) {
+      // 🔍 Find the order by its custom orderId string (e.g., CHU-ORD-XXXX)
+      const order = await Order.findOne({ orderId }).select("_id");
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found for given orderId",
+        });
+      }
+      // ✅ Use the actual MongoDB _id in your query
+      match.order = order._id;
+    }
+
+    const reviews = await Review.find(match)
+      .populate("order", "orderId status totalAmount createdAt")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: reviews.length,
+      reviews,
+    });
+  } catch (err) {
+    console.error("listUserReviews error:", err);
     next(err);
   }
 }
@@ -118,25 +150,46 @@ export async function deleteReview(req, res, next) {
 // GET /api/reviews/summary
 export async function reviewSummary(req, res, next) {
   try {
-    const orderId = req.query.orderId;
-    const match = orderId ? { order: mongoose.Types.ObjectId(orderId) } : {};
+    const { orderId } = req.query
 
+    // Build match filter dynamically
+    const match = {}
+    if (orderId) {
+      if (!mongoose.Types.ObjectId.isValid(orderId)) {
+        return res.status(400).json({ success: false, message: 'Invalid order ID' })
+      }
+      match.order = new mongoose.Types.ObjectId(orderId)
+    }
+
+    // Aggregate reviews
     const summary = await Review.aggregate([
       { $match: match },
       {
         $group: {
-          _id: '$order',
+          _id: null, // null groups all results if no orderId filter
           averageRating: { $avg: '$rating' },
           totalReviews: { $sum: 1 }
         }
       }
-    ]);
+    ])
 
-    if (!summary.length) return res.json({ success: true, averageRating: 0, totalReviews: 0 });
+    // Handle empty results
+    if (!summary.length) {
+      return res.json({
+        success: true,
+        averageRating: 0,
+        totalReviews: 0
+      })
+    }
 
-    const { averageRating, totalReviews } = summary[0];
-    res.json({ success: true, averageRating: Number(averageRating.toFixed(1)), totalReviews });
+    const { averageRating, totalReviews } = summary[0]
+    res.json({
+      success: true,
+      averageRating: Number(averageRating.toFixed(1)),
+      totalReviews
+    })
   } catch (err) {
-    next(err);
+    console.error('Review summary error:', err)
+    next(err)
   }
 }
