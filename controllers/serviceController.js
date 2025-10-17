@@ -89,13 +89,14 @@ export const updateService = async (req, res, next) => {
  */
 export const deleteService = async (req, res, next) => {
   try {
-    const service = await Service.findByIdAndDelete(req.params.id);
+    const service = await Service.findOneAndDelete({ _id: req.params.id });
     if (!service) return res.status(404).json({ message: "Service not found" });
 
-    await ServicePricing.deleteMany({ service: service._id });
-
-    res.json({ message: "Service and related pricings deleted successfully" });
+    res.json({
+      message: "Service and related pricings deleted successfully",
+    });
   } catch (err) {
     next(err);
   }
 };
+

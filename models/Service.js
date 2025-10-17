@@ -14,4 +14,13 @@ const ServiceSchema = new mongoose.Schema({
   }]
 });
 
+// 🧹 Cascade delete ServicePricing when Service is deleted
+ServiceSchema.pre('findOneAndDelete', async function (next) {
+  const service = await this.model.findOne(this.getFilter());
+  if (service) {
+    await mongoose.model('ServicePricing').deleteMany({ service: service._id });
+  }
+  next();
+});
+
 export default mongoose.model("Service", ServiceSchema);
