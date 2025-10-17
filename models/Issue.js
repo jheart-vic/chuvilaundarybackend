@@ -16,7 +16,7 @@ const IssueSchema = new mongoose.Schema({
   order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: false },
   status: {
     type: String,
-    enum: ['open', 'in_progress', 'resolved', 'closed'],
+    enum: ['open', 'in Progress', 'resolved', 'closed'],
     default: 'open'
   },
   // 👇 Original customer's initial message stored as the first entry in messages
