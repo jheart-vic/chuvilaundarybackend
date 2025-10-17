@@ -1,24 +1,25 @@
-// controllers/serviceController.js
 import Service from "../models/Service.js";
 import ServicePricing from "../models/ServicePricing.js";
 import { calculateTierPrice } from "../utils/pricingHelper.js";
 
-// Customer-facing: list services with retail pricing included
+/**
+ * List services with their retail pricings
+ */
 export const listServices = async (req, res, next) => {
   try {
-    // Fetch all services
-    const services = await Service.find();
+    const services = await Service.find().lean();
 
-    // Attach pricings for each service
     const results = [];
     for (const service of services) {
       const pricings = await ServicePricing.find({
-        serviceCode: service.code,
-        pricingModel: "RETAIL"
-      }).select("-__v -createdAt -updatedAt");
+        service: service._id,
+        pricingModel: "RETAIL",
+      })
+        .select("-__v -createdAt -updatedAt")
+        .lean();
 
       results.push({
-        ...service.toObject(),
+        ...service,
         pricings,
       });
     }
@@ -29,31 +30,23 @@ export const listServices = async (req, res, next) => {
   }
 };
 
-/** Create service + auto-create pricing tiers */
+/**
+ * Create service + auto-create pricing tiers
+ */
 export const createService = async (req, res, next) => {
   try {
     const payload = req.body;
     const service = await Service.create(payload);
 
     const retailTiers = ["STANDARD", "PREMIUM", "VIP"];
-
     for (const tier of retailTiers) {
-      const existingPricing = await ServicePricing.findOne({
-        serviceCode: service.code,
+      const price = calculateTierPrice(service.basePrice || 1000, tier);
+      await ServicePricing.create({
+        service: service._id,
         serviceTier: tier,
         pricingModel: "RETAIL",
+        pricePerItem: price,
       });
-
-      if (!existingPricing) {
-        const price = calculateTierPrice(service.basePrice || 1000, tier);
-
-        await ServicePricing.create({
-          serviceCode: service.code,
-          serviceTier: tier,
-          pricingModel: "RETAIL",
-          pricePerItem: price,
-        });
-      }
     }
 
     res.status(201).json(service);
@@ -62,7 +55,9 @@ export const createService = async (req, res, next) => {
   }
 };
 
-/** Update service + recalc pricing tiers if base price changes */
+/**
+ * Update service + recalc pricing tiers
+ */
 export const updateService = async (req, res, next) => {
   try {
     const service = await Service.findById(req.params.id);
@@ -74,14 +69,11 @@ export const updateService = async (req, res, next) => {
 
     if (req.body.basePrice && req.body.basePrice !== oldBasePrice) {
       const retailTiers = ["STANDARD", "PREMIUM", "VIP"];
-
       for (const tier of retailTiers) {
         const newPrice = calculateTierPrice(service.basePrice, tier);
-
         await ServicePricing.findOneAndUpdate(
-          { serviceCode: service.code, serviceTier: tier, pricingModel: "RETAIL" },
-          { pricePerItem: newPrice },
-          { new: true }
+          { service: service._id, serviceTier: tier, pricingModel: "RETAIL" },
+          { pricePerItem: newPrice }
         );
       }
     }
@@ -92,17 +84,18 @@ export const updateService = async (req, res, next) => {
   }
 };
 
-/** Delete a service + cascade delete pricing */
+/**
+ * Delete service + cascade delete pricings
+ */
 export const deleteService = async (req, res, next) => {
   try {
     const service = await Service.findByIdAndDelete(req.params.id);
     if (!service) return res.status(404).json({ message: "Service not found" });
 
-    await ServicePricing.deleteMany({ serviceCode: service.code });
+    await ServicePricing.deleteMany({ service: service._id });
 
     res.json({ message: "Service and related pricings deleted successfully" });
   } catch (err) {
     next(err);
   }
 };
-

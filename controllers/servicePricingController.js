@@ -1,10 +1,8 @@
-// controllers/servicePricingController.js
 import ServicePricing from "../models/ServicePricing.js";
 import Service from "../models/Service.js";
 
 /**
- * Create or update a service pricing entry
- * Admin can define per tier & pricing model
+ * Create or update (upsert) a pricing entry
  */
 export const upsertPricing = async (req, res, next) => {
   try {
@@ -16,24 +14,22 @@ export const upsertPricing = async (req, res, next) => {
 
     const service = await Service.findOne({ code: serviceCode });
     if (!service) {
-      return res
-        .status(404)
-        .json({ message: `Service ${serviceCode} not found` });
+      return res.status(404).json({ message: `Service ${serviceCode} not found` });
     }
 
+    // match by ObjectId of service
     const pricing = await ServicePricing.findOneAndUpdate(
-      { serviceCode, serviceTier, pricingModel },
+      { service: service._id, serviceTier, pricingModel },
       {
-        serviceCode,
+        service: service._id,
         serviceTier,
         pricingModel,
         pricePerItem,
       },
       { upsert: true, new: true }
-    ).lean();
-
-    // attach serviceName dynamically
-    pricing.serviceName = service.name;
+    )
+      .populate("service", "name code")
+      .lean();
 
     res.json({ message: "Pricing saved", pricing });
   } catch (err) {
@@ -42,20 +38,25 @@ export const upsertPricing = async (req, res, next) => {
 };
 
 /**
- * Get all pricings (optionally filter by serviceCode)
+ * List all pricings (optionally filter by serviceCode)
  */
 export const listPricings = async (req, res, next) => {
   try {
     const { serviceCode } = req.query;
-    const filter = serviceCode ? { serviceCode } : {};
+    let filter = {};
 
-    const pricings = await ServicePricing.find(filter).lean().sort({ serviceCode: 1 });
-
-    // attach serviceName dynamically for each
-    for (const p of pricings) {
-      const svc = await Service.findOne({ code: p.serviceCode }).lean();
-      p.serviceName = svc?.name || "";
+    if (serviceCode) {
+      const service = await Service.findOne({ code: serviceCode });
+      if (!service) {
+        return res.status(404).json({ message: `Service ${serviceCode} not found` });
+      }
+      filter.service = service._id;
     }
+
+    const pricings = await ServicePricing.find(filter)
+      .populate("service", "name code")
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json(pricings);
   } catch (err) {
@@ -64,15 +65,15 @@ export const listPricings = async (req, res, next) => {
 };
 
 /**
- * Get a single pricing entry
+ * Get single pricing
  */
 export const getPricing = async (req, res, next) => {
   try {
-    const pricing = await ServicePricing.findById(req.params.id).lean();
-    if (!pricing) return res.status(404).json({ message: "Pricing not found" });
+    const pricing = await ServicePricing.findById(req.params.id)
+      .populate("service", "name code")
+      .lean();
 
-    const svc = await Service.findOne({ code: pricing.serviceCode }).lean();
-    pricing.serviceName = svc?.name || "";
+    if (!pricing) return res.status(404).json({ message: "Pricing not found" });
 
     res.json(pricing);
   } catch (err) {
@@ -81,7 +82,7 @@ export const getPricing = async (req, res, next) => {
 };
 
 /**
- * Delete a pricing entry
+ * Delete pricing
  */
 export const deletePricing = async (req, res, next) => {
   try {

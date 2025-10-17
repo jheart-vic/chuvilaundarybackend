@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { listServices } from "../controllers/serviceController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
-import { listPricings } from "../controllers/servicePricingController.js";
+// import { listPricings } from "../controllers/servicePricingController.js";
 
 
 const router = Router();
 
 router.get("/",requireAuth, listServices);
-router.post("/",requireAuth, listPricings); // placeholder for create service
+// router.post("/",requireAuth, listPricings); // placeholder for create service
 
 
 export default router;

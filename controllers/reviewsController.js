@@ -76,10 +76,10 @@ export async function createReview(req, res, next) {
   }
 }
 
-//Admin or user can list reviews for an order
+// Admin or user can list reviews for an order
 export async function listReviews(req, res, next) {
   try {
-    const reviews = await Review.find({ order: req.param.orderId })
+    const reviews = await Review.find()
       .populate('user', 'fullName')
       .sort({ createdAt: -1 });
 
