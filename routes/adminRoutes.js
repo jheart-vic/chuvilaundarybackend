@@ -57,7 +57,7 @@ router.patch("/orders/:orderId/cancel", requireAuth, requireEmployeeOrAdmin, can
 // Subscription Plan routes
 router.post("/plans", requireAuth, requireAdmin, createPlan);
 router.put("/plans/:code", requireAuth, requireAdmin, updatePlan);
-router.delete("/plans/:code", requireAuth, requireAdmin, deactivatePlan);
+router.patch("/plans/:code/deactivate", requireAuth, requireAdmin, deactivatePlan);
 router.patch('/plans/:code/activate',requireAuth, requireAdmin, activatePlan);
 router.get('/plan/:id', requireAuth, requireAdmin,  getSinglePlan)
 router.get("/plans/active", requireAuth, requireAdmin, listActivePlans);
