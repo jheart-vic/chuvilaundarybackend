@@ -80,7 +80,7 @@ export async function createReview(req, res, next) {
 export async function listReviews(req, res, next) {
   try {
     const reviews = await Review.find()
-      .populate('user', 'fullName')
+      .populate('user', 'fullName email phone')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, reviews });
