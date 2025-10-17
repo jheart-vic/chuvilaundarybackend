@@ -61,7 +61,7 @@ export const listPlans = async (req, res, next) => {
 
 export const getPlan = async (req, res, next) => {
   try {
-    const plan = await SubscriptionPlan.findOne({ code: req.params.code });
+    const plan = await SubscriptionPlan.find();
     if (!plan) return res.status(404).json({ message: "Plan not found" });
     res.json(plan);
   } catch (err) {
