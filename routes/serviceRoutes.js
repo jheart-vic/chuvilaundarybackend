@@ -6,7 +6,7 @@ import { requireAuth } from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
-router.get("/",requireAuth, listServices);
+router.get("/", listServices);
 // router.post("/",requireAuth, listPricings); // placeholder for create service
 
 
