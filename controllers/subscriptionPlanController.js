@@ -129,3 +129,24 @@ export const listActivePlans = async (req, res, next) => {
     next(err);
   }
 };
+
+export const deletePlan = async (req, res, next) => {
+  try {
+    const plan = await SubscriptionPlan.findOneAndDelete({ code: req.params.code });
+
+    if (!plan) {
+      return res.status(404).json({ success: false, message: "Plan not found" });
+    }
+
+    // Optional: emit socket event for real-time updates
+    if (req.io) req.io.emit("plan:deleted", { code: req.params.code });
+
+    res.json({
+      success: true,
+      message: `Plan '${plan.name || plan.code}' deleted successfully`,
+      deletedPlan: plan,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
