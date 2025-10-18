@@ -339,9 +339,7 @@ export const getCurrentSubscription = async (req, res, next) => {
     const daysLeft = Math.max(0, Math.ceil(renewalDate.diff(now, "days").days));
 
     // 🔁 Determine auto-renew status
-    const autoRenew =
-      subscription.status === "ACTIVE" &&
-      !["CANCELLED", "CANCEL_AT_PERIOD_END"].includes(subscription.status);
+     const autoRenew = subscription.autoRenew && !subscription.auto_payment_cancelled;
 
     // 🔢 Calculate items remaining
     const currentUsage = subscription.usage[subscription.usage.length - 1]; // latest period
@@ -400,7 +398,9 @@ export const cancelSubscription = async (req, res) => {
     const { subId } = req.params;
     const subscription = await Subscription.findOne({ subId }).populate('customer');
 
-    if (!subscription) return res.status(404).json({ message: "Subscription not found" });
+    if (!subscription) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
 
     if (subscription.auto_payment_cancelled) {
       return res.status(400).json({ message: "Auto payment already cancelled" });
@@ -408,7 +408,7 @@ export const cancelSubscription = async (req, res) => {
 
     const gateway = subscription.payment?.gateway;
 
-    // Cancel the auto-payment remotely
+    // Cancel remote auto-payment
     if (gateway === "MONNIFY") {
       const mandateRef = subscription.payment?.monnify?.authorizationRef;
       if (mandateRef) await cancelMonnifyMandate(mandateRef);
@@ -419,14 +419,17 @@ export const cancelSubscription = async (req, res) => {
       if (authorizationCode) subscription.payment.paystack.authorizationCode = null;
     }
 
-    // ✅ Mark auto-payment as cancelled locally
+    // ✅ Update local subscription flags
     subscription.auto_payment_cancelled = true;
+    subscription.autoRenew = false; // 👈 new clear flag for convenience
     subscription.canceled_reason = req.body.reason || "Auto-payment cancelled";
+    subscription.updatedAt = new Date();
+
     await subscription.save();
 
     return res.json({
       success: true,
-      message: "Auto-payment cancelled successfully. Current plan remains active.",
+      message: "Auto-payment cancelled successfully. Current plan remains active until the end of the billing cycle.",
       subscription
     });
   } catch (err) {
@@ -434,82 +437,3 @@ export const cancelSubscription = async (req, res) => {
     res.status(500).json({ message: "Failed to cancel auto-payment", error: err.message });
   }
 };
-
-
-
-// export const cancelSubscription = async (req, res) => {
-//   try {
-//     const { subId } = req.params;
-
-//     // ✅ Find by custom subscription ID
-//     const subscription = await Subscription.findOne({ subId }).populate('customer');
-
-//     if (!subscription) {
-//       return res.status(404).json({ message: "Subscription not found" });
-//     }
-
-//     // ❌ Prevent double cancellation
-//     if (subscription.status === "CANCELLED") {
-//       return res.status(400).json({ message: "Subscription already cancelled" });
-//     }
-
-//     // 🔁 Identify payment gateway
-//     const gateway = subscription.payment?.gateway;
-
-//     // 🚫 Cancel auto-payment remotely if applicable
-//     if (gateway === "MONNIFY") {
-//       const mandateRef = subscription.payment?.monnify?.authorizationRef;
-//       if (mandateRef) {
-//         try {
-//           await cancelMonnifyMandate(mandateRef);
-//         } catch (err) {
-//           console.error("Monnify mandate cancellation failed:", err);
-//           return res.status(500).json({
-//             message: "Failed to cancel Monnify mandate",
-//             error: err.message
-//           });
-//         }
-//       }
-//     } else if (gateway === "PAYSTACK") {
-//       const subscriptionCode = subscription.payment?.paystack?.subscriptionCode;
-//       const authorizationCode = subscription.payment?.paystack?.authorizationCode;
-
-//       if (subscriptionCode) {
-//         try {
-//           await cancelPaystackSubscription(subscriptionCode);
-//         } catch (err) {
-//           console.error("Paystack subscription cancellation failed:", err);
-//           return res.status(500).json({
-//             message: "Failed to cancel Paystack subscription",
-//             error: err.message
-//           });
-//         }
-//       } else if (authorizationCode) {
-//         // Manual recurring via stored authorization
-//         subscription.payment.paystack.authorizationCode = null;
-//         subscription.auto_payment_cancelled = true;
-//       }
-//     }
-
-//     // 🧾 Update subscription status locally
-//     subscription.status = "CANCELLED";
-//     subscription.auto_payment_cancelled = subscription.auto_payment_cancelled || true;
-//     subscription.canceled_reason = req.body.reason || "User cancelled manually";
-//     subscription.ended_at = new Date();
-
-//     await subscription.save();
-
-//     return res.json({
-//       success: true,
-//       message: "Subscription cancelled successfully",
-//       subscription
-//     });
-//   } catch (err) {
-//     console.error("Cancel subscription error:", err);
-//     res.status(500).json({
-//       message: "Failed to cancel subscription",
-//       error: err.message
-//     });
-//   }
-// };
-

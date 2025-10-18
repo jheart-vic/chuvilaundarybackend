@@ -144,6 +144,8 @@ router.post("/webhook/monnify", async (req, res) => {
         subscription.payment.amountPaid = paidAmount;
         subscription.payment.balance = 0;
         subscription.payment.failedAttempts = 0;
+        subscription.autoRenew = true;
+        subscription.auto_payment_cancelled = false;
         subscription.status = "ACTIVE";
 
         let newPeriodStart;

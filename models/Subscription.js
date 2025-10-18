@@ -15,6 +15,7 @@ const subscriptionSchema = new mongoose.Schema(
       unique: true,
       index: true
     },
+   autoRenew: { type: Boolean, default: true },
     status: {
       type: String,
       enum: [

@@ -195,6 +195,8 @@ router.post('/webhook/paystack', async (req, res) => {
         if (isNew) {
           // ✅ First-time activation — don’t shift the period
           subscription.status = 'ACTIVE'
+          subscription.autoRenew = true;
+          subscription.auto_payment_cancelled = false;
           subscription.period_start = now.toJSDate()
           subscription.period_end = now.plus({ months: 1 }).toJSDate()
           subscription.renewal_date = now.plus({ months: 1 }).toJSDate()
