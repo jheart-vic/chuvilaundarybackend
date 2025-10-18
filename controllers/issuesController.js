@@ -36,7 +36,7 @@ export async function createIssue(req, res, next) {
       type: 'system'
     });
 
-    const supportEmail = process.env.SUPPORT_EMAIL || 'hello@chuvilaundry.com';
+    const supportEmail = process.env.SUPPORT_EMAIL || 'hello@chuvilaundary.com';
 
     // ✅ Email goes to support, not the user
     await sendEmail(

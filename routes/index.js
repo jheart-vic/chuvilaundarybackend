@@ -22,7 +22,7 @@ router.use("/users", usersRoutes);
 router.use("/coupons", couponsRoutes);
 router.use("/admin", adminRoutes);
 router.use("/reviews", reviewRoutes);
-router.use('/api/notifications', notificationRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/subscriptions', subscriptionRoutes);
 router.use("/issues", issueRoutes);
 router.use("/", emailSubscriberRoutes);
