@@ -11,7 +11,7 @@ import { updateOrderStatus } from "../controllers/orderController.js";
 import { activatePlan, createPlan, deactivatePlan, deletePlan, getPlan, getSinglePlan, listActivePlans, updatePlan } from "../controllers/subscriptionPlanController.js";
 import { getTotalIssues, listIssues, updateIssue } from "../controllers/issuesController.js";
 import { listReviews, reviewSummary } from "../controllers/reviewsController.js";
-import { listAllNotifications } from "../controllers/notificationController.js";
+import { listAllNotifications, markAllAsRead, markAsRead } from "../controllers/notificationController.js";
 
 const router = Router();
 const allowedModels = ["Order", "ServicePricing", "Service", "User", "Notification", "Coupon", "SubscriptionPlan"];
@@ -76,6 +76,8 @@ router.get('/reviews/summary', requireAuth,requireEmployeeOrAdmin, reviewSummary
 
 //notification
 router.get( "/notifications",  requireAuth,  requireAdmin,  listAllNotifications );
+router.patch('/:id/read', requireAuth, requireAdmin, markAsRead);
+router.patch('/read-all', requireAuth,requireAdmin, markAllAsRead);
 
 // Generic delete many route for any model
 router.delete("/:model", requireAdmin, async (req, res) => {
