@@ -51,12 +51,11 @@ export async function updateIssue(req, res, next) {
     const { id } = req.params;
     const { status, adminMessage } = req.body;
 
-    const allowedStatuses = ['open', 'in_progress', 'resolved', 'closed'];
+    const allowedStatuses = ['open', 'in Progress', 'resolved', 'closed'];
     if (status && !allowedStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid status' });
     }
 
-    // 1️⃣ Find the related order
     const order = await Order.findOne({ orderId: id });
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
