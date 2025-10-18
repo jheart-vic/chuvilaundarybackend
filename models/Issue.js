@@ -13,6 +13,7 @@ const MessageSchema = new mongoose.Schema({
 const IssueSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
   phone: { type: String, required: true },
+  email: { type: String, required: true },
   order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: false },
   status: {
     type: String,

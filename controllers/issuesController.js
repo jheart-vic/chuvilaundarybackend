@@ -6,19 +6,26 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-// create, update, get total issues, list issues
+// 🟩 Create new issue
 export async function createIssue(req, res, next) {
   try {
-    const { fullName, phone, order, message } = req.body;
+    const { fullName, phone, order, message, email } = req.body;
+
+    // ✅ Use logged-in user's email if available, otherwise fallback to provided email
+    const userEmail = req.user?.email || email;
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: "Email is required to report an issue" });
+    }
 
     const issue = await Issue.create({
       fullName,
       phone,
+      email: userEmail, // 👈 ensure email is stored
       order,
       messages: [{ sender: 'customer', content: message }]
     });
 
-    // Re-fetch issue with populated orderId (for response)
     const populatedIssue = await Issue.findById(issue._id)
       .populate('order', 'orderId');
 
@@ -29,13 +36,18 @@ export async function createIssue(req, res, next) {
       type: 'system'
     });
 
-    const supportEmail = process.env.SUPPORT_EMAIL || 'support@yourapp.com';
+    const supportEmail = process.env.SUPPORT_EMAIL || 'hello@chuvilaundry.com';
+
+    // ✅ Email goes to support, not the user
     await sendEmail(
       supportEmail,
       'New Issue Reported',
-      `<p>User <strong>${fullName}</strong> (${phone}) reported an issue:</p>
-       <p><em>${message}</em></p>
-       ${populatedIssue.order ? `<p>Order ID: ${populatedIssue.order.orderId}</p>` : ''}`
+      `
+        <p>User <strong>${fullName}</strong> (${phone}) reported an issue:</p>
+        <p><em>${message}</em></p>
+        ${userEmail ? `<p>Email: ${userEmail}</p>` : ''}
+        ${populatedIssue.order ? `<p>Order ID: ${populatedIssue.order.orderId}</p>` : ''}
+      `
     );
 
     await notifyIssueEvent({ user: req.user, issue: populatedIssue, type: 'issue_created' });
@@ -46,12 +58,13 @@ export async function createIssue(req, res, next) {
   }
 }
 
+// 🟩 Update issue (admin)
 export async function updateIssue(req, res, next) {
   try {
     const { id } = req.params;
     const { status, adminMessage } = req.body;
 
-    const allowedStatuses = ['open', 'in Progress', 'resolved', 'closed'];
+    const allowedStatuses = ['open', 'in_progress', 'resolved', 'closed'];
     if (status && !allowedStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid status' });
     }
@@ -61,11 +74,10 @@ export async function updateIssue(req, res, next) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
-    // 2️⃣ Prepare update object
     const updateFields = {};
     const messagesToPush = [];
 
-    // If status changed, log it as a message
+    // Log automatic message when status changes
     if (status) {
       if (!updateFields.$set) updateFields.$set = {};
       updateFields.$set.status = status;
@@ -77,7 +89,7 @@ export async function updateIssue(req, res, next) {
       });
     }
 
-    // If admin manually added a message
+    // Include manual admin message if provided
     if (adminMessage) {
       messagesToPush.push({
         sender: 'admin',
@@ -86,12 +98,10 @@ export async function updateIssue(req, res, next) {
       });
     }
 
-    // Only push messages if any exist
     if (messagesToPush.length > 0) {
       updateFields.$push = { messages: { $each: messagesToPush } };
     }
 
-    // 3️⃣ Update the issue document
     const issue = await Issue.findOneAndUpdate(
       { order: order._id },
       updateFields,
@@ -102,7 +112,28 @@ export async function updateIssue(req, res, next) {
       return res.status(404).json({ success: false, error: 'Issue not found for this order' });
     }
 
-    // 4️⃣ Create an in-app notification
+    // ✅ Email fallback logic
+    const userEmail = issue.email || req.user?.email;
+    if (!userEmail) {
+      console.warn(`⚠️ Skipping email: no recipient defined for issue ${issue._id}`);
+    } else {
+      await sendEmail(
+        userEmail,
+        `Your Issue (${order.orderId}) is ${issue.status}`,
+        `
+          <p>Hello ${issue.fullName},</p>
+          <p>Your issue regarding order <strong>${order.orderId}</strong> has been updated.</p>
+          <p><strong>Status:</strong> ${issue.status}</p>
+          ${
+            adminMessage
+              ? `<p><strong>Note from support:</strong> ${adminMessage}</p>`
+              : `<p><strong>Note from support:</strong> Status changed to ${issue.status.replace('_', ' ')} by Admin.</p>`
+          }
+          <p>We’ll keep you informed as it progresses.</p>
+        `
+      );
+    }
+
     await Notification.create({
       user: req.user?._id,
       title: 'Issue Updated',
@@ -110,24 +141,6 @@ export async function updateIssue(req, res, next) {
       type: 'system'
     });
 
-    // 5️⃣ Send user email
-    await sendEmail(
-      issue.phone || issue.email,
-      `Your Issue (${order.orderId}) is ${issue.status}`,
-      `
-        <p>Hello ${issue.fullName},</p>
-        <p>Your issue regarding order <strong>${order.orderId}</strong> has been updated.</p>
-        <p><strong>Status:</strong> ${issue.status}</p>
-        ${
-          adminMessage
-            ? `<p><strong>Note from support:</strong> ${adminMessage}</p>`
-            : `<p><strong>Note from support:</strong> Status changed to ${issue.status.replace('_', ' ')} by Admin.</p>`
-        }
-        <p>We’ll keep you informed as it progresses.</p>
-      `
-    );
-
-    // 6️⃣ Notify via sockets / real-time events
     await notifyIssueEvent({ user: req.user, issue, type: 'issue_updated' });
 
     return res.json({ success: true, issue });
@@ -136,28 +149,30 @@ export async function updateIssue(req, res, next) {
   }
 }
 
-export async function getTotalIssues (req, res, next) {
+// 🟩 Get issue stats
+export async function getTotalIssues(req, res, next) {
   try {
-    const totalIssues = await Issue.countDocuments()
-    const openIssues = await Issue.countDocuments({ status: 'open' })
-    const resolvedIssues = await Issue.countDocuments({ status: 'resolved' })
+    const totalIssues = await Issue.countDocuments();
+    const openIssues = await Issue.countDocuments({ status: 'open' });
+    const resolvedIssues = await Issue.countDocuments({ status: 'resolved' });
 
     res.json({
       total: totalIssues,
       open: openIssues,
       resolved: resolvedIssues
-    })
+    });
   } catch (err) {
-    next(err)
+    next(err);
   }
 }
 
+// 🟩 List all issues (admin)
 export async function listIssues(req, res, next) {
   try {
     const issues = await Issue.find({})
       .sort({ createdAt: -1 })
       .limit(200)
-      .populate('order', 'orderId'); // 👈 Only include orderId
+      .populate('order', 'orderId');
 
     return res.json({ success: true, issues });
   } catch (err) {
