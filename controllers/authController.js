@@ -106,16 +106,21 @@ export const register = async (req, res) => {
     });
 
     // ✅ Reward inviter if valid
+ // ✅ Reward inviter if valid
     if (inviter) {
-      inviter.referralCredits += 1;
+      const REFERRAL_BONUS = 500; // ₦500 bonus
+
+      inviter.referralCredits = (inviter.referralCredits || 0) + REFERRAL_BONUS;
       await inviter.save();
+
       await Notification.create({
         user: inviter._id,
-        title: "New Referral",
-        message: `${fullName} joined using your referral code!`,
+        title: "Referral Bonus Earned 🎉",
+        message: `${fullName} signed up using your referral code! You earned ₦${REFERRAL_BONUS} referral bonus.`,
         type: "referral",
       });
     }
+
 
     // ✅ Try sending OTP via Termii
     try {

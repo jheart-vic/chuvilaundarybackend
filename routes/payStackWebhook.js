@@ -115,7 +115,7 @@ router.post('/webhook/paystack', async (req, res) => {
               user: order.user,
               order,
               attachmentPath: receiptPath,
-              type: success ? 'orderDelivered' : 'payment_failed'
+              type: success ? 'orderBooked' : 'payment_failed'
             })
           } catch (err) {
             console.warn('⚠️ User notification failed:', err.message)

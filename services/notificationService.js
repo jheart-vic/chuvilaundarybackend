@@ -100,6 +100,8 @@ export async function notifyOrderEvent ({
       'Dear {{name}}, your laundry order is ready. Delivery window: {{window}}. Powered by Chuvilaundry.',
     orderDelivered:
       'Dear {{name}}, your laundry was delivered. Amount: ₦{{amount}}, Payment: {{method}}. Thank you for choosing Chuvilaundry.',
+    orderBooked:
+      'Dear {{name}}, your laundry has been Booked. Amount: ₦{{amount}}, Payment: {{method}}. Thank you for choosing Chuvilaundry.',
     rescheduled:
       'Dear {{name}}, due to {{reason}}, your delivery is rescheduled to {{new_window}}. Thank you for your patience. – Chuvilaundry.',
     feedback:
@@ -117,14 +119,16 @@ export async function notifyOrderEvent ({
     orderCreatedForAdmin:
       'New order received. Order ID: {{orderId}}, Pickup: {{window}}. Customer: {{name}}. Delivery PIN: {{pin}}',
     orderBookedForAdmin: `🧾 New Order Booked! Order ID: {{orderId}} Customer: {{name}} Phone: {{phone}} Pickup Date: {{pickupDate}} ({{pickupWindow}}) Delivery Date: {{deliveryDate}} ({{deliveryWindow}}) Service Tier: {{tier}} Delivery PIN: {{pin}} Total Amount: ₦{{amount}} Please log in to the admin dashboard to view full order details.`,
-
+    installmentalPaymentOnDelivery:
+      'Dear {{name}}, we’ve received your installment payment of ₦{{amount}} for Order ID: {{orderId}} upon delivery. Your payment has been recorded successfully. Thank you for choosing Chuvi Laundry',
     // ✅ Payment events
     payment_success:
       'Dear {{name}}, your payment of ₦{{amount}} via {{method}} was successful. Thank you for using Chuvilaundry.',
     payment_failed:
       'Dear {{name}}, your payment attempt of ₦{{amount}} via {{method}} has failed. Please try again or contact support. hello@chuvilaundry.com',
     payment_failed_forAdmin: `⚠️ Payment Failed Alert! Order ID: {{orderId}}, Customer: {{name}}, Phone: {{phone}}, Email: {{email}}, Amount: ₦{{amount}}, Payment Method: {{method}}, Gateway: {{gateway}}, Reference: {{transactionId}}, Reason: {{reason}}. Please check the admin dashboard or payment gateway for more details.`,
-
+    installmentalPaymentOnDeliveryForAdmin:
+     '🧾 Installment payment received! Order ID: {{orderId}} Customer: {{name}} Amount Paid: ₦{{amount}} Payment Mode: On Delivery. The payment has been marked as received and recorded successfully.',
     // ✅ Cancellation events
     cancelled_admin:
       'Dear {{name}}, your laundry order was cancelled by Chuvilaundry support. Please contact us if you need further assistance. hello@chuvilaundry.com',

@@ -63,6 +63,7 @@ const PaymentPlanSchema = new mongoose.Schema(
     // 🧾 Installments (shared)
     installments: [
       {
+        label: String, // 👈 Add this for clarity
         dueDate: Date,
         amount: Number,
         status: {
@@ -72,6 +73,7 @@ const PaymentPlanSchema = new mongoose.Schema(
         }
       }
     ],
+
     checkoutUrl: String,
 
     // 🔁 Billing metadata

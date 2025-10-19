@@ -165,6 +165,17 @@ export const createOrder = async (req, res, next) => {
         totals.discount = (totals.discount || 0) + firstOrderDiscount
       }
 
+      let referralCreditUsed = 0
+
+      if (user.referralCredits > 0) {
+        referralCreditUsed = Math.min(user.referralCredits, totals.grandTotal)
+        totals.grandTotal = Math.max(totals.grandTotal - referralCreditUsed, 0)
+        totals.discount = (totals.discount || 0) + referralCreditUsed
+
+        user.referralCredits -= referralCreditUsed // deduct used credits
+        await user.save({ session })
+      }
+
       const expectedReadyAt = computeExpectedReadyAt(
         new Date(payload.pickup.date),
         serviceTier,
@@ -227,22 +238,61 @@ export const createOrder = async (req, res, next) => {
         }
       }
 
-      // 💰 Installment validation
-      if (paymentInput.mode === 'INSTALLMENT' && paymentInput.installments) {
-        paymentData.installments = paymentInput.installments.map(i => ({
-          dueDate: i.dueDate,
-          amount: i.amount,
-          status: 'PENDING'
-        }))
+      // 💰 Installment setup (payment due on delivery)
+      // 💰 Installment setup (70% upfront, 30% on delivery)
+      if (paymentInput.mode === 'INSTALLMENT') {
+        const dueDate = new Date(payload.delivery.date)
 
-        const totalInstallments = paymentData.installments.reduce(
-          (s, i) => s + i.amount,
-          0
-        )
-        if (totalInstallments !== totals.grandTotal) {
-          return res
-            .status(400)
-            .json({ message: 'Installment amounts must equal grand total' })
+        // Calculate 70/30 split
+        const upfrontAmount = Math.round(totals.grandTotal * 0.7)
+        const deliveryAmount = totals.grandTotal - upfrontAmount // remaining 30%
+
+        paymentData.installments = [
+          {
+            label: 'Upfront Payment',
+            dueDate: new Date(), // paid immediately
+            amount: upfrontAmount,
+            status: 'PAID' // since it’s the current payment
+          },
+          {
+            label: 'Delivery Payment',
+            dueDate,
+            amount: deliveryAmount,
+            status: 'PENDING' // due on delivery
+          }
+        ]
+
+        // Set payment summary
+        paymentData.amountPaid = upfrontAmount
+        paymentData.balance = deliveryAmount
+
+        // Send email to user
+        try {
+          const emailHtml = `
+      <h2>Installment Plan Confirmed</h2>
+      <p>Dear ${user.fullName || 'Customer'},</p>
+      <p>Your order <strong>${orderId}</strong> has been placed successfully with our installment plan.</p>
+      <ul>
+        <li><strong>Upfront Payment:</strong> ₦${upfrontAmount.toLocaleString()} (PAID)</li>
+        <li><strong>On Delivery:</strong> ₦${deliveryAmount.toLocaleString()} (Due on ${DateTime.fromJSDate(
+            dueDate
+          )
+            .setZone('Africa/Lagos')
+            .toFormat('ccc, dd LLL yyyy')})</li>
+      </ul>
+      <p>Total: <strong>₦${totals.grandTotal.toLocaleString()}</strong></p>
+      <br/>
+      <p>Thank you for choosing Chuvi Laundry!</p>
+      <small>This is an automated message. Please do not reply.</small>
+    `
+
+          await sendEmail(
+            user.email,
+            'Installment Plan — 70% Upfront, 30% on Delivery',
+            emailHtml
+          )
+        } catch (err) {
+          console.error('Installment email failed:', err.message)
         }
       }
 
@@ -260,7 +310,8 @@ export const createOrder = async (req, res, next) => {
             photos,
             couponCode,
             totals,
-            discount: firstOrderDiscount,
+            discount: firstOrderDiscount + referralCreditUsed,
+            referralCreditUsed,
             pickup: payload.pickup,
             delivery: payload.delivery,
             status: 'Pending Payment',
@@ -464,6 +515,48 @@ export const updateOrderStatus = async (req, res, next) => {
 
     order.status = status
     order.history.push({ status, note })
+
+    // 💰 If payment is INSTALLMENT and order is now Delivered, mark final installment as PAID
+    if (
+      order.payment.mode === 'INSTALLMENT' &&
+      (status === 'Delivered' || status === 'Paid')
+    ) {
+      const lastInstallment = order.payment.installments[1] // 30% on delivery
+
+      if (lastInstallment && lastInstallment.status === 'PENDING') {
+        lastInstallment.status = 'PAID'
+        order.payment.balance = 0
+        order.payment.amountPaid += lastInstallment.amount // add final payment
+        order.payment.status = 'PAID'
+      }
+
+      // Optional: generate receipt & notify user
+      try {
+        const receiptPath = await generateReceipt(order)
+
+        await notifyOrderEvent({
+          user: order.user,
+          order: { orderId: order.orderId },
+          attachmentPath: receiptPath,
+          type: 'installmentalPaymentOnDelivery' // email template
+        })
+
+        const admins = await User.find({ role: 'admin' })
+        await Promise.all(
+          admins.map(admin =>
+            notifyOrderEvent({
+              user: admin,
+              order: { orderId: order.orderId },
+              attachmentPath: receiptPath,
+              type: 'installmentalPaymentOnDeliveryForAdmin'
+            })
+          )
+        )
+      } catch (err) {
+        console.warn('⚠️ Receipt or notification failed:', err.message)
+      }
+    }
+
     await order.save()
 
     // 🔔 Notify user with mapped template
@@ -506,13 +599,13 @@ export const cancelOrderUser = async (req, res, next) => {
     }
 
     // ✅ Safe extraction of reason
-    const reason  = req.body.reason?.trim() || 'Cancelled by user'
+    const reason = req.body.reason?.trim() || 'Cancelled by user'
 
-      // Update order
-    order.status = 'Cancelled';
-    order.cancellationReason = reason;
-    order.cancelledBy = 'user';
-    order.cancelledAt = new Date();
+    // Update order
+    order.status = 'Cancelled'
+    order.cancellationReason = reason
+    order.cancelledBy = 'user'
+    order.cancelledAt = new Date()
 
     order.history.push({
       status: 'Cancelled',
@@ -628,53 +721,55 @@ export async function getOrderReceipt (req, res) {
 
 export const previewOrder = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate("currentSubscription");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findById(req.user._id).populate(
+      'currentSubscription'
+    )
+    if (!user) return res.status(404).json({ message: 'User not found' })
 
-    const payload = req.body;
-    console.log("🧾 Preview payload:", payload);
+    const payload = req.body
+    console.log('🧾 Preview payload:', payload)
 
-    let plan = null;
-    let usage = null;
+    let plan = null
+    let usage = null
 
-    const subscription = user.currentSubscription;
-    if (subscription?.status === "ACTIVE") {
+    const subscription = user.currentSubscription
+    if (subscription?.status === 'ACTIVE') {
       plan = await SubscriptionPlan.findOne({
         code: subscription.plan_code,
-        active: true,
-      });
+        active: true
+      })
 
       if (plan) {
-        const periodLabel = new Date().toISOString().slice(0, 7);
+        const periodLabel = new Date().toISOString().slice(0, 7)
         usage = await SubUsage.findOne({
           subscription: subscription._id,
-          period_label: periodLabel,
-        });
+          period_label: periodLabel
+        })
       }
     }
 
-    const pricingModel = plan ? "SUBSCRIPTION" : "RETAIL";
+    const pricingModel = plan ? 'SUBSCRIPTION' : 'RETAIL'
 
     const totals = await computeOrderTotals(
       {
         ...payload,
         pricingModel,
-        userPhone: user.phone,
+        userPhone: user.phone
       },
       { plan, usage }
-    );
+    )
 
     const previousOrders = await Order.countDocuments({
       user: user._id,
-      status: { $ne: "Cancelled" },
-    });
+      status: { $ne: 'Cancelled' }
+    })
 
-    const isFirstOrder = previousOrders === 0 && !user.hasUsedFirstOrderDiscount;
+    const isFirstOrder = previousOrders === 0 && !user.hasUsedFirstOrderDiscount
 
-    if (isFirstOrder && pricingModel === "RETAIL") {
-      const firstOrderDiscount = 500;
-      totals.firstOrderDiscount = firstOrderDiscount;
-      totals.grandTotal = Math.max(totals.grandTotal - firstOrderDiscount, 0);
+    if (isFirstOrder && pricingModel === 'RETAIL') {
+      const firstOrderDiscount = 500
+      totals.firstOrderDiscount = firstOrderDiscount
+      totals.grandTotal = Math.max(totals.grandTotal - firstOrderDiscount, 0)
     }
 
     res.json({
@@ -682,11 +777,11 @@ export const previewOrder = async (req, res) => {
       totals,
       meta: {
         pricingModel,
-        isFirstOrder,
-      },
-    });
+        isFirstOrder
+      }
+    })
   } catch (err) {
-    console.error("❌ Preview failed:", err.stack || err);
-    res.status(500).json({ message: err.message || "Failed to preview order" });
+    console.error('❌ Preview failed:', err.stack || err)
+    res.status(500).json({ message: err.message || 'Failed to preview order' })
   }
-};
+}

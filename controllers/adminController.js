@@ -4,7 +4,8 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import Coupon from '../models/Coupon.js'
 import dotenv from 'dotenv'
-import { notifyOrderEvent } from '../services/notificationService.js'
+import { notifyOrderEvent, sendEmail } from '../services/notificationService.js'
+import Notification from '../models/Notification.js'
 dotenv.config()
 
 const generateReferralCode = () => {
@@ -392,3 +393,42 @@ export const cancelOrderAdmin = async (req, res, next) => {
     next(err)
   }
 }
+
+export const broadcastMessage = async (req, res, next) => {
+  try {
+    const { title, message, sendEmailNotification = false } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ message: 'Title and message are required' });
+    }
+
+    // Find all users except admins
+    const users = await User.find({ role: { $ne: 'admin' } }).select('_id email fullName');
+
+    // Create notifications for each user
+    const notifications = users.map(u => ({
+      user: u._id,
+      title,
+      message,
+      type: 'system'
+    }));
+
+    await Notification.insertMany(notifications);
+
+    // Optionally send email to all users
+    if (sendEmailNotification) {
+      for (const u of users) {
+        if (!u.email) continue;
+        await sendEmail({
+          to: u.email,
+          subject: title,
+          html: `<p>Hi ${u.fullName || 'User'},</p><p>${message}</p>`
+        });
+      }
+    }
+
+    res.json({ success: true, message: 'Broadcast sent to all users.' });
+  } catch (err) {
+    next(err);
+  }
+};

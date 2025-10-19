@@ -320,3 +320,29 @@
 //   }
 // }
 
+// ✅ Reward inviter and new user if valid referral
+if (inviter) {
+  const REFERRAL_BONUS = 500; // ₦500 bonus each
+
+  // Reward inviter
+  inviter.referralCredits = (inviter.referralCredits || 0) + REFERRAL_BONUS;
+  await inviter.save();
+
+  await Notification.create({
+    user: inviter._id,
+    title: "Referral Bonus Earned 🎉",
+    message: `${fullName} signed up using your referral code! You earned ₦${REFERRAL_BONUS} referral bonus.`,
+    type: "referral",
+  });
+
+  // Reward the new user
+  newUser.referralCredits = (newUser.referralCredits || 0) + REFERRAL_BONUS;
+  await newUser.save();
+
+  await Notification.create({
+    user: newUser._id,
+    title: "Welcome Bonus 🎁",
+    message: `You joined using a referral code and earned ₦${REFERRAL_BONUS} bonus credit.`,
+    type: "referral",
+  });
+}

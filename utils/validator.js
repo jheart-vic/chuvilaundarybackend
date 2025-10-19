@@ -333,5 +333,6 @@ export const createIssueSchema = Joi.object({
   order: Joi.string()
     .optional() // not all issues must be tied to an order
     .allow(null, ''),
+  email: Joi.string().email().optional(),
   message: Joi.string().min(5).max(1000).required()
 })

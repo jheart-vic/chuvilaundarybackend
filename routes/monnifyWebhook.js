@@ -95,7 +95,7 @@ router.post("/webhook/monnify", async (req, res) => {
         user: order.user,
         order,
         attachmentPath: receiptPath,
-        type: success ? "orderDelivered" : "payment_failed",
+        type: success ? "orderBooked" : "payment_failed",
         extra: success
           ? { amount: order.payment.amountPaid, method: order.payment.method }
           : undefined,

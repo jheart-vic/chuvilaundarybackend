@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createEmployee, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive, deleteEmployee, listAllOrders, cancelOrderAdmin, getTotalOrders } from "../controllers/adminController.js";
+import { createEmployee, deleteCoupon, getCouponById, getCoupons, createCoupon, updateCoupon, adminRegister, adminLogin, listEmployees, toggleCouponActive, deleteEmployee, listAllOrders, cancelOrderAdmin, getTotalOrders, broadcastMessage } from "../controllers/adminController.js";
 import { validateBody } from "../middlewares/validateMiddleware.js";
 import { requireAuth, requireAdmin, requireEmployeeOrAdmin } from "../middlewares/authMiddleware.js";
 import { adminLoginSchema, adminRegisterSchema, createCouponSchema, createEmployeeSchema, updateStatusSchema } from "../utils/validator.js";
@@ -76,9 +76,9 @@ router.get('/reviews/summary', requireAuth,requireEmployeeOrAdmin, reviewSummary
 
 //notification
 router.get( "/notifications",  requireAuth,  requireAdmin,  listAllNotifications );
-router.patch('/:id/read', requireAuth, requireAdmin, markAsRead);
-router.patch('/read-all', requireAuth,requireAdmin, markAllAsRead);
-
+router.patch('/notifications/:id/read', requireAuth, requireAdmin, markAsRead);
+router.patch('/notifications/read-all', requireAuth,requireAdmin, markAllAsRead);
+router.create('/broadcast', requireAuth,requireAdmin, broadcastMessage)
 // Generic delete many route for any model
 router.delete("/:model", requireAdmin, async (req, res) => {
   try {
