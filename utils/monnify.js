@@ -41,7 +41,7 @@ export async function initMonnifyPayment ({
       paymentDescription: `Order Payment - ${orderId}`,
       currencyCode: 'NGN',
       contractCode: CONTRACT_CODE,
-      redirectUrl: process.env.MONNIFY_REDIRECT_URL,
+      redirectUrl: `${process.env.FRONTEND_URL}/order-success/${orderId}`,
       paymentMethods: [paymentMethod]
     }
 
