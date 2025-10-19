@@ -241,6 +241,15 @@ router.post('/webhook/paystack', async (req, res) => {
         )
       }
 
+      // ✅ Link subscription to user profile
+      try {
+        await User.findByIdAndUpdate(subscription.user._id, {
+          $set: { currentSubscription: subscription._id }
+        });
+        console.log(`👤 User currentSubscription updated for ${subscription.user._id}`);
+      } catch (linkErr) {
+        console.error("⚠️ Failed to update user currentSubscription:", linkErr);
+      }
       return res.status(200).json({ message: 'Subscription webhook processed' })
     }
 
