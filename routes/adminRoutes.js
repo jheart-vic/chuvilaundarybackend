@@ -78,7 +78,7 @@ router.get('/reviews/summary', requireAuth,requireEmployeeOrAdmin, reviewSummary
 router.get( "/notifications",  requireAuth,  requireAdmin,  listAllNotifications );
 router.patch('/notifications/:id/read', requireAuth, requireAdmin, markAsRead);
 router.patch('/notifications/read-all', requireAuth,requireAdmin, markAllAsRead);
-router.create('/broadcast', requireAuth,requireAdmin, broadcastMessage)
+router.post('/broadcast', requireAuth,requireAdmin, broadcastMessage)
 // Generic delete many route for any model
 router.delete("/:model", requireAdmin, async (req, res) => {
   try {

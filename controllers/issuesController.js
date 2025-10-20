@@ -33,7 +33,7 @@ export async function createIssue(req, res, next) {
       user: req.user?._id,
       title: 'New Issue Created',
       message: `Issue reported: ${message}`,
-      type: 'system'
+      type: 'issue'
     });
 
     const supportEmail = process.env.SUPPORT_EMAIL || 'hello@chuvilaundary.com';
