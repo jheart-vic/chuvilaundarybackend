@@ -208,7 +208,7 @@ export const createOrderSchema = Joi.object({
 
   payment: Joi.object({
     method: Joi.string()
-      .valid('CARD', 'BANK_TRANSFER', 'CASH', 'WALLET', 'SUBSCRIPTION')
+      .valid('CARD', 'BANK_TRANSFER', 'WALLET', 'SUBSCRIPTION')
       .required(),
     mode: Joi.string().valid('FULL', 'INSTALLMENT').optional(),
     gateway: Joi.string().valid('PAYSTACK', 'MONNIFY').required()
