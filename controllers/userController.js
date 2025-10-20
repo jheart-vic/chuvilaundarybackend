@@ -323,7 +323,7 @@ export const getReferralInfo = async (req, res) => {
       return res.status(404).json({ error: 'Referral code not found' })
     }
 
-    const referralLink = `https://chuvi-app-5sky.vercel.app/register?code=${user.referralCode}`
+    const referralLink = `https://chuvi-app-pzuv.vercel.app/register?code=${user.referralCode}`
 
     res.json({ referralCode: user.referralCode, referralLink })
   } catch (err) {
